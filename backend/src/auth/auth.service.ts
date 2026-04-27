@@ -1,26 +1,56 @@
 import { Injectable } from '@nestjs/common';
-import { CreateAuthDto } from './dto/create-auth.dto';
-import { UpdateAuthDto } from './dto/update-auth.dto';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { User } from '../users/entities/user.entity';
+
+interface OAuthUserPayload {
+  provider: string;
+  providerId: string;
+  email: string;
+  name: string;
+}
 
 @Injectable()
 export class AuthService {
-  create(createAuthDto: CreateAuthDto) {
-    return 'This action adds a new auth';
+  constructor(
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  async findOrCreateUser(payload: OAuthUserPayload): Promise<User> {
+    let user = await this.userRepository.findOne({
+      where: { providerId: payload.providerId },
+    });
+
+    if (!user) {
+      user = this.userRepository.create(payload);
+      await this.userRepository.save(user);
+    }
+
+    return user;
   }
 
-  findAll() {
-    return `This action returns all auth`;
-  }
+  issueTokens(userId: string) {
+    const accessToken = this.jwtService.sign(
+      { sub: userId },
+      {
+        secret: this.configService.get<string>('JWT_SECRET')!,
+        expiresIn: this.configService.get('JWT_EXPIRES_IN', '2h'),
+      },
+    );
 
-  findOne(id: number) {
-    return `This action returns a #${id} auth`;
-  }
+    const refreshToken = this.jwtService.sign(
+      { sub: userId },
+      {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET')!,
+        expiresIn: this.configService.get('JWT_REFRESH_EXPIRES_IN', '14d'),
+      },
+    );
 
-  update(id: number, updateAuthDto: UpdateAuthDto) {
-    return `This action updates a #${id} auth`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} auth`;
+    return { accessToken, refreshToken };
   }
 }
