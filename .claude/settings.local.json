@@ -3,7 +3,20 @@
     "allow": [
       "Bash(npx @nestjs/cli new . --package-manager npm --skip-git --language TS)",
       "Bash(npm install *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(docker-compose up *)",
+      "Bash(curl *)",
+      "Bash(node dist/main)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(echo \"---EXIT:$?\")",
+      "Bash(docker exec confirm_postgres *)",
+      "Bash(PGPASSWORD=password psql *)",
+      "Bash(node *)",
+      "Bash(netstat -ano)",
+      "Bash(tasklist /FI \"PID eq 344\")",
+      "Bash(tasklist /FI \"PID eq 6668\")",
+      "Bash(docker-compose down *)",
+      "PowerShell(Stop-Service *)"
     ]
   }
 }
