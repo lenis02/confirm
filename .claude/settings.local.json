@@ -23,7 +23,10 @@
       "Bash(unzip -o \"905fbc38-f86b-4f99-bbe5-0c0c9274a403_ExportBlock-32b1914d-10e7-4e1f-b4e8-7197458afb53.zip\" -d notion_req)",
       "Bash(unzip -o \"070a5b2d-5ed6-4399-b89a-a73cb237c0aa_ExportBlock-3dd0ba38-8fc5-4a73-90fa-935f2a846e35.zip\" -d notion_api)",
       "Bash(unzip -o \"C:\\\\Users\\\\26553\\\\Downloads\\\\notion_req\\\\ExportBlock-32b1914d-10e7-4e1f-b4e8-7197458afb53-Part-1.zip\" -d \"C:\\\\Users\\\\26553\\\\Downloads\\\\notion_req_md\")",
-      "Bash(unzip -o \"C:\\\\Users\\\\26553\\\\Downloads\\\\notion_api\\\\ExportBlock-3dd0ba38-8fc5-4a73-90fa-935f2a846e35-Part-1.zip\" -d \"C:\\\\Users\\\\26553\\\\Downloads\\\\notion_api_md\")"
+      "Bash(unzip -o \"C:\\\\Users\\\\26553\\\\Downloads\\\\notion_api\\\\ExportBlock-3dd0ba38-8fc5-4a73-90fa-935f2a846e35-Part-1.zip\" -d \"C:\\\\Users\\\\26553\\\\Downloads\\\\notion_api_md\")",
+      "Bash(nest g *)",
+      "Bash(nest build *)",
+      "Bash(npx nest *)"
     ]
   }
 }
