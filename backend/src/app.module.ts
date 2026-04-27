@@ -1,6 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
+import { ProjectsModule } from './projects/projects.module';
+import { MeetingsModule } from './meetings/meetings.module';
+import { ActionItemsModule } from './action-items/action-items.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -21,6 +27,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
         synchronize: true,
       }),
     }),
+    AuthModule,
+    UsersModule,
+    ProjectsModule,
+    MeetingsModule,
+    ActionItemsModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}
