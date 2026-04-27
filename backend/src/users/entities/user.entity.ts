@@ -19,6 +19,9 @@ export class User {
   @Column()
   name: string;
 
+  @Column({ name: 'job_title', nullable: true })
+  jobTitle: string;
+
   @Column()
   provider: string;
 
