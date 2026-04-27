@@ -1,34 +1,55 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
-import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { User } from './entities/user.entity';
+import { CreateIntegrationDto } from './dto/create-integration.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UsersService } from './users.service';
 
 @Controller('users')
+@UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+  @Get('me')
+  getMe(@CurrentUser() user: User) {
+    return this.usersService.getMe(user.id);
   }
 
-  @Get()
-  findAll() {
-    return this.usersService.findAll();
+  @Patch('me')
+  updateMe(@CurrentUser() user: User, @Body() dto: UpdateUserDto) {
+    return this.usersService.updateMe(user.id, dto);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.usersService.findOne(+id);
+  @Post('integrations')
+  createIntegration(
+    @CurrentUser() user: User,
+    @Body() dto: CreateIntegrationDto,
+  ) {
+    return this.usersService.createIntegration(user.id, dto);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(+id, updateUserDto);
+  @Get('integrations')
+  getIntegrations(@CurrentUser() user: User) {
+    return this.usersService.getIntegrations(user.id);
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(+id);
+  @Delete('integrations/:integrationId')
+  @HttpCode(204)
+  deleteIntegration(
+    @CurrentUser() user: User,
+    @Param('integrationId') integrationId: string,
+  ) {
+    return this.usersService.deleteIntegration(user.id, integrationId);
   }
 }
