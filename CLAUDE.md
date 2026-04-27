@@ -56,50 +56,83 @@ confirm/
 
 ## API 엔드포인트 목록
 
+> 인증: 구글 소셜 로그인 단일 방식. 이메일/비밀번호 로그인 미지원.
+
 ### 인증 (`/api/auth`)
-| Method | Path | 설명 |
-|--------|------|------|
-| POST | `/api/users/signup` | 회원가입 |
-| POST | `/api/auth/login` | 로그인 (JWT 발급) |
-| POST | `/api/auth/refresh` | Access Token 갱신 |
-| POST | `/api/auth/logout` | 로그아웃 |
+| Method | Path | 설명 | 권한 |
+|--------|------|------|------|
+| POST | `/api/auth/google` | 구글 OAuth 인가 코드로 JWT 발급. 신규 유저 자동 회원가입. AccessToken 2시간 / RefreshToken 2주 | 비로그인 |
+| POST | `/api/auth/refresh` | RefreshToken으로 AccessToken 재발급. 만료 시 재로그인 요구 | 비로그인 |
+| POST | `/api/auth/logout` | Access Token 삭제 | 로그인 |
 
-### 프로젝트 & WBS (`/api/projects`)
-| Method | Path | 설명 |
-|--------|------|------|
-| GET | `/api/projects` | 프로젝트 목록 조회 |
-| POST | `/api/projects` | 프로젝트 생성 |
-| GET | `/api/projects/{projectId}` | 프로젝트 상세 조회 |
-| PUT | `/api/projects/{projectId}` | 프로젝트 수정 |
-| DELETE | `/api/projects/{projectId}` | 프로젝트 삭제 |
-| POST | `/api/projects/{projectId}/documents` | 문서 업로드 (수행계획서 등 PDF) |
-| POST | `/api/projects/{projectId}/wbs/generate` | WBS 자동 생성 (LLM 호출) |
-| GET | `/api/projects/{projectId}/wbs` | WBS 조회 |
-| PUT | `/api/projects/{projectId}/wbs` | WBS 수동 수정 |
-| POST | `/api/projects/{projectId}/action-items` | Action Item 수동 추가 |
+### 사용자 (`/api/users`)
+| Method | Path | 설명 | 권한 |
+|--------|------|------|------|
+| GET | `/api/users/me` | 로그인한 사용자 본인 정보 조회 | 로그인 |
+| PATCH | `/api/users/me` | 이름, 직군 등 프로필 수정. 이메일 변경 불가 | 로그인 |
+| POST | `/api/users/integrations` | 외부 서비스 연동 등록. accessToken AES-256 암호화 저장. 서비스당 1개 제한 | 로그인 |
+| GET | `/api/users/integrations` | 연동된 외부 서비스 목록. ACTIVE/EXPIRED 상태 포함 | 로그인 |
+| DELETE | `/api/users/integrations/{integrationId}` | 외부 서비스 연동 해제. 해제 시 알림 발송 중단 | 로그인 |
 
-### 회의 (`/api/meetings`)
-| Method | Path | 설명 |
-|--------|------|------|
-| GET | `/api/projects/{projectId}/meetings` | 회의 목록 조회 |
-| POST | `/api/projects/{projectId}/meetings` | 회의 생성 |
-| GET | `/api/meetings/{meetingId}` | 회의 상세 |
-| PUT | `/api/meetings/{meetingId}` | 회의 수정 |
-| GET | `/api/meetings/{meetingId}/template` | 회의 유형별 표준 템플릿 조회 |
-| POST | `/api/meetings/{meetingId}/checklist` | 체크리스트 항목 생성 |
-| PUT | `/api/meetings/{meetingId}/checklist/{itemId}` | 체크리스트 항목 상태 업데이트 |
-| POST | `/api/meetings/{meetingId}/stt` | STT 텍스트 업로드 → 체크리스트 자동 검증 |
-| GET | `/api/meetings/{meetingId}/summary` | 회의록 요약 조회 |
-| GET | `/api/meetings/{meetingId}/action-items` | 미결 Action Item 목록 |
+### 프로젝트 (`/api/projects`)
+| Method | Path | 설명 | 권한 |
+|--------|------|------|------|
+| GET | `/api/projects` | PM이 속한 프로젝트 목록. 상태(ACTIVE/ARCHIVED) 필터링 | 로그인 |
+| POST | `/api/projects` | 신규 프로젝트 생성. 프로젝트명·기간 등 기본 메타데이터 입력 | 로그인 |
+| GET | `/api/projects/{projectId}` | 프로젝트 상세 조회. 해당 프로젝트 멤버만 접근 가능 | 로그인 |
+| PATCH | `/api/projects/{projectId}` | 프로젝트명·기간 등 수정. PM 역할만 가능 | 로그인 |
+| DELETE | `/api/projects/{projectId}` | 프로젝트 삭제. WBS·회의·Action Item cascade 삭제. PM 역할만 가능 | 로그인 |
 
-### 사용자 & 외부 서비스 연동 (`/api/users`)
-| Method | Path | 설명 |
-|--------|------|------|
-| GET | `/api/users/me` | 내 프로필 조회 |
-| PUT | `/api/users/me` | 내 프로필 수정 |
-| POST | `/api/users/integrations` | 외부 서비스 연동 등록 (accessToken AES-256 암호화 저장) |
-| GET | `/api/users/integrations` | 연동된 외부 서비스 목록 (ACTIVE/EXPIRED 상태 포함) |
-| DELETE | `/api/users/integrations/{integrationId}` | 외부 서비스 연동 해제 (해제 시 알림 발송 중단) |
+### 문서 (`/api/projects/{projectId}/documents`)
+| Method | Path | 설명 | 권한 |
+|--------|------|------|------|
+| POST | `/api/projects/{projectId}/documents` | PDF/HWP 업로드. multipart/form-data. OCR 후 비동기 LLM 파싱 큐 등록. 상태 PENDING으로 저장 | 로그인 |
+| GET | `/api/projects/{projectId}/documents` | 업로드 문서 목록. status(PENDING/IN_PROGRESS/COMPLETED/FAILED) 필터링 | 로그인 |
+| GET | `/api/projects/{projectId}/documents/{documentId}` | 문서 상세 및 파싱 결과. status COMPLETED일 때만 분석 결과 반환 | 로그인 |
+
+### WBS (`/api/projects/{projectId}/wbs`)
+| Method | Path | 설명 | 권한 |
+|--------|------|------|------|
+| GET | `/api/projects/{projectId}/wbs` | LLM이 생성한 WBS 조회. 업무별 기간·담당 직군 포함. status COMPLETED일 때만 응답 | 로그인 |
+| PATCH | `/api/projects/{projectId}/wbs` | AI 제안 WBS 최종 검토 및 확정. 확정 시 프로젝트 베이스라인 설정 | 로그인 |
+| PATCH | `/api/projects/{projectId}/wbs/{milestoneId}` | 마일스톤 개별 수정. isDecisionPoint 변경 시 회의 추천 일정 재계산 트리거 | 로그인 |
+| GET | `/api/projects/{projectId}/meeting-recommendations` | 확정 WBS 마일스톤 기반 회의 일정 추천 반환 | 로그인 |
+
+### 팀원 (`/api/projects/{projectId}/members`)
+| Method | Path | 설명 | 권한 |
+|--------|------|------|------|
+| GET | `/api/projects/{projectId}/members` | 프로젝트 참여자 목록 및 역할 조회. 직군·역할별 필터링 | 로그인 |
+| POST | `/api/projects/{projectId}/members` | 팀원 초대 및 역할 할당. 초대 링크 발송 또는 시스템 내 유저 매핑 | 로그인 |
+| PATCH | `/api/projects/{projectId}/members/{memberId}` | 팀원 역할 수정. PM 역할만 가능 | 로그인 |
+| DELETE | `/api/projects/{projectId}/members/{memberId}` | 팀원 제거. PM 역할만 가능. 해당 팀원 알림 발송 | 로그인 |
+
+### Action Item (`/api/projects/{projectId}/action-items`, `/api/action-items`)
+| Method | Path | 설명 | 권한 |
+|--------|------|------|------|
+| GET | `/api/projects/{projectId}/action-items` | 프로젝트 내 전체 Action Item 목록. 상태(PENDING/COMPLETED)·담당자 필터링 | 로그인 |
+| POST | `/api/projects/{projectId}/action-items` | PM이 수동으로 Action Item 추가. 담당자·데드라인 필수 | 로그인 |
+| PATCH | `/api/action-items/{itemId}` | 완료/미완료 상태 토글. 완료 시 완료 시각·처리자 서버 기록 | 로그인 |
+
+### 회의 (`/api/projects/{projectId}/meetings`, `/api/meetings`)
+| Method | Path | 설명 | 권한 |
+|--------|------|------|------|
+| GET | `/api/projects/{projectId}/meetings` | 프로젝트 회의 목록. 상태(SCHEDULED/IN_PROGRESS/COMPLETED) 필터링 | 로그인 |
+| POST | `/api/projects/{projectId}/meetings` | 회의 생성. 회의 종류 필수(킥오프/진도점검/이슈체크/합의). LLM이 체크리스트 초안 생성 | 로그인 |
+| GET | `/api/meetings/{meetingId}` | 회의 상세 조회 | 로그인 |
+| PATCH | `/api/meetings/{meetingId}` | 회의 일정·제목 수정. 상태 SCHEDULED일 때만 가능 | 로그인 |
+| DELETE | `/api/meetings/{meetingId}` | 회의 삭제. 상태 SCHEDULED일 때만 가능. 체크리스트·Action Item cascade 삭제 | 로그인 |
+| GET | `/api/meetings/{meetingId}/checklists` | 회의 체크리스트 전체 조회. isDone 포함 반환 | 로그인 |
+| PATCH | `/api/meetings/{meetingId}/checklists` | AI 제안 체크리스트 항목 추가·수정. 회의 시작 전 최종 어젠다 세팅 | 로그인 |
+| GET | `/api/meetings/{meetingId}/briefing` | 이전 회의 미결 사항 및 맥락 조회. 이월된 Action Item 반환 | 로그인 |
+| POST | `/api/meetings/{meetingId}/stt` | 녹음 파일 업로드. multipart/form-data. 비동기 STT 변환 및 체크리스트 자동 검증 트리거 | 로그인 |
+| GET | `/api/meetings/{meetingId}/transcript` | STT 변환 텍스트 조회. status COMPLETED일 때만 응답 | 로그인 |
+| POST | `/api/meetings/{meetingId}/completion` | 회의 종료 및 완료 처리. 비동기: STT 요약·달성률 계산·미결 항목 다음 회의 이월 | 로그인 |
+| GET | `/api/meetings/{meetingId}/metrics` | 최종 회의록·요약 데이터 조회. status COMPLETED일 때만 응답. 체크리스트 달성률 포함 | 로그인 |
+
+### 대시보드 (`/api/dashboard`)
+| Method | Path | 설명 | 권한 |
+|--------|------|------|------|
+| GET | `/api/dashboard/calendar` | PM 소속 전체 프로젝트의 주간 일정 및 의사결정 마일스톤 조회. week 쿼리 파라미터로 기준 날짜 전달 | 로그인 |
 
 ---
 
