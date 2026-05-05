@@ -1,23 +1,28 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { flushSync } from 'react-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function AuthCallbackPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const accessToken = params.get('accessToken');
-    const refreshToken = params.get('refreshToken');
+    const accessToken = searchParams.get('accessToken');
+    const refreshToken = searchParams.get('refreshToken');
 
     if (accessToken && refreshToken) {
-      login(accessToken, refreshToken);
+      // flushSync: state 업데이트를 동기적으로 flush한 뒤 navigate 실행
+      // 없으면 PrivateRoute가 isAuthenticated=false로 평가해 /login으로 튕김
+      flushSync(() => {
+        login(accessToken, refreshToken);
+      });
       navigate('/', { replace: true });
     } else {
       navigate('/login', { replace: true });
     }
-  }, [login, navigate]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
