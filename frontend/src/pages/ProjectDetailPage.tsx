@@ -11,19 +11,23 @@ const MEETING_TYPE_LABEL: Record<string, string> = {
   KICKOFF: '킥오프', PROGRESS_CHECK: '진도점검', ISSUE_CHECK: '이슈체크', CONSENSUS: '합의',
 };
 const MEETING_TYPE_COLOR: Record<string, string> = {
-  KICKOFF: 'bg-purple-100 text-purple-700', PROGRESS_CHECK: 'bg-blue-100 text-blue-700',
-  ISSUE_CHECK: 'bg-red-100 text-red-700', CONSENSUS: 'bg-green-100 text-green-700',
+  KICKOFF: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+  PROGRESS_CHECK: 'bg-orange-50 text-orange-600 border-orange-200',
+  ISSUE_CHECK: 'bg-red-50 text-red-600 border-red-200',
+  CONSENSUS: 'bg-green-50 text-green-700 border-green-200',
 };
 const MEETING_STATUS_LABEL: Record<string, { label: string; cls: string }> = {
-  SCHEDULED: { label: '예정', cls: 'bg-gray-100 text-gray-600' },
-  IN_PROGRESS: { label: '진행 중', cls: 'bg-yellow-100 text-yellow-700' },
-  COMPLETED: { label: '완료', cls: 'bg-green-100 text-green-700' },
+  SCHEDULED: { label: '예정', cls: 'bg-gray-50 text-gray-500 border-gray-200' },
+  IN_PROGRESS: { label: '진행 중', cls: 'bg-orange-50 text-orange-600 border-orange-200' },
+  COMPLETED: { label: '완료', cls: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
 };
 const COMPLEXITY_COLOR: Record<string, string> = {
-  High: 'bg-red-100 text-red-700', Medium: 'bg-yellow-100 text-yellow-700', Low: 'bg-green-100 text-green-700',
+  High: 'bg-red-50 text-red-600 border-red-200',
+  Medium: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+  Low: 'bg-green-50 text-green-700 border-green-200',
 };
 
-// ── WBS 탭 ─────────────────────────────────────────────────────────────────
+// ── WBS 탭 ────────────────────────────────────────────────────────────────────
 function WbsTab({ projectId }: { projectId: string }) {
   const [docs, setDocs] = useState<Document[]>([]);
   const [wbs, setWbs] = useState<ProjectWbs | null>(null);
@@ -43,7 +47,6 @@ function WbsTab({ projectId }: { projectId: string }) {
     return () => clearInterval(pollRef.current);
   }, [projectId]);
 
-  // 문서 처리 중 폴링
   useEffect(() => {
     const processing = docs.some(d => d.status === 'PENDING' || d.status === 'IN_PROGRESS');
     clearInterval(pollRef.current);
@@ -87,92 +90,100 @@ function WbsTab({ projectId }: { projectId: string }) {
   const isProcessing = docs.some(d => d.status === 'PENDING' || d.status === 'IN_PROGRESS');
 
   return (
-    <div className="space-y-5">
-      {/* 업로드 영역 */}
-      <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center">
-        <p className="text-sm text-gray-500 mb-3">수행계획서(PDF)를 업로드하면 AI가 WBS를 자동 생성합니다</p>
+    <div className="space-y-4">
+      {/* 업로드 */}
+      <div className="border-2 border-dashed border-gray-200 rounded p-5 text-center bg-gray-50">
+        <p className="text-xs text-gray-400 mb-3">수행계획서(PDF)를 업로드하면 AI가 WBS를 자동 생성합니다</p>
         <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={upload} />
-        <button onClick={() => fileRef.current?.click()} disabled={uploading || isProcessing}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading || isProcessing}
+          className="border border-orange-400 text-orange-600 px-4 py-1.5 rounded text-sm hover:bg-orange-50 transition disabled:opacity-50 cursor-pointer"
+        >
           {uploading ? '업로드 중...' : '파일 선택'}
         </button>
       </div>
 
       {/* 문서 목록 */}
       {docs.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {docs.map(d => (
-            <div key={d.id} className="flex items-center gap-3 bg-white border rounded-lg px-4 py-3 text-sm">
+            <div key={d.id} className="flex items-center gap-3 bg-white border border-gray-200 rounded px-4 py-2.5 text-sm">
               <span className="flex-1 truncate text-gray-700">{d.fileName}</span>
-              {d.status === 'PENDING' || d.status === 'IN_PROGRESS' ? (
-                <span className="flex items-center gap-1.5 text-yellow-600">
-                  <span className="w-4 h-4 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin inline-block" />
-                  AI 분석 중...
+              {(d.status === 'PENDING' || d.status === 'IN_PROGRESS') ? (
+                <span className="flex items-center gap-1.5 text-xs text-orange-500">
+                  <span className="w-3.5 h-3.5 border-2 border-orange-400 border-t-transparent rounded-full animate-spin inline-block" />
+                  분석 중
                 </span>
               ) : d.status === 'COMPLETED' ? (
-                <span className="text-green-600 font-medium">✓ 완료</span>
+                <span className="text-xs text-green-600">완료</span>
               ) : (
-                <span className="text-red-500">✗ 실패: {d.errorMessage}</span>
+                <span className="text-xs text-red-500">실패</span>
               )}
             </div>
           ))}
         </div>
       )}
 
-      {/* WBS 테이블 */}
+      {/* WBS */}
       {wbs && !wbsError && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <div>
-              <span className="font-semibold text-gray-800">WBS</span>
-              <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${wbs.status === 'CONFIRMED' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                {wbs.status === 'CONFIRMED' ? '확정됨' : '초안'}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-gray-800">WBS</span>
+              <span className={`text-xs px-1.5 py-0.5 border rounded ${wbs.status === 'CONFIRMED' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
+                {wbs.status === 'CONFIRMED' ? '확정' : '초안'}
               </span>
             </div>
             {wbs.status === 'DRAFT' && (
-              <button onClick={confirm} disabled={confirming}
-                className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-green-700 disabled:opacity-50">
+              <button
+                onClick={confirm}
+                disabled={confirming}
+                className="bg-orange-500 text-white px-3 py-1.5 rounded text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer"
+              >
                 {confirming ? '확정 중...' : 'WBS 확정'}
               </button>
             )}
           </div>
 
           {wbs.projectSummary && (
-            <p className="text-sm text-gray-600 bg-blue-50 rounded-lg p-3 mb-3">{wbs.projectSummary}</p>
+            <p className="text-xs text-gray-600 bg-yellow-50 border border-yellow-100 rounded px-3 py-2 mb-3">{wbs.projectSummary}</p>
           )}
 
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="overflow-x-auto border border-gray-200 rounded">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-600 text-xs">
-                <tr>
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
                   {['ID', '태스크명', '부서', '복잡도', '기간', '시작일', '종료일', '의사결정'].map(h => (
-                    <th key={h} className="px-3 py-2 text-left font-medium">{h}</th>
+                    <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {wbs.items.map(item => (
-                  <tr key={item.id} className={`hover:bg-gray-50 ${item.isDecisionPoint ? 'bg-purple-50' : ''}`}>
+                  <tr key={item.id} className={`hover:bg-gray-50 ${item.isDecisionPoint ? 'bg-orange-50/40' : ''}`}>
                     <td className="px-3 py-2 text-gray-400 font-mono text-xs">{item.taskId ?? `T${String(item.order).padStart(2, '0')}`}</td>
-                    <td className="px-3 py-2 font-medium text-gray-800 max-w-xs">
-                      <div className="truncate">{item.title}</div>
+                    <td className="px-3 py-2 max-w-xs">
+                      <div className="text-sm font-medium text-gray-800 truncate">{item.title}</div>
                       {item.reasoning && <div className="text-xs text-gray-400 truncate">{item.reasoning}</div>}
                     </td>
-                    <td className="px-3 py-2 text-gray-600">{item.assignedRole}</td>
+                    <td className="px-3 py-2 text-xs text-gray-600">{item.assignedRole}</td>
                     <td className="px-3 py-2">
                       {item.complexity && (
-                        <span className={`text-xs px-1.5 py-0.5 rounded ${COMPLEXITY_COLOR[item.complexity] ?? 'bg-gray-100 text-gray-600'}`}>
+                        <span className={`text-xs px-1.5 py-0.5 border rounded ${COMPLEXITY_COLOR[item.complexity] ?? 'bg-gray-50 text-gray-500 border-gray-200'}`}>
                           {item.complexity}
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-gray-600">{item.durationDays}일</td>
-                    <td className="px-3 py-2 text-gray-500 text-xs">{item.startDate ?? '-'}</td>
-                    <td className="px-3 py-2 text-gray-500 text-xs">{item.endDate ?? '-'}</td>
+                    <td className="px-3 py-2 text-xs text-gray-600">{item.durationDays}일</td>
+                    <td className="px-3 py-2 text-xs text-gray-400">{item.startDate ?? '-'}</td>
+                    <td className="px-3 py-2 text-xs text-gray-400">{item.endDate ?? '-'}</td>
                     <td className="px-3 py-2">
-                      <button onClick={() => toggleDecision(item.id, item.isDecisionPoint)}
-                        className={`w-5 h-5 rounded border-2 flex items-center justify-center transition ${item.isDecisionPoint ? 'bg-purple-600 border-purple-600 text-white' : 'border-gray-300'}`}>
-                        {item.isDecisionPoint && <span className="text-xs">✓</span>}
+                      <button
+                        onClick={() => toggleDecision(item.id, item.isDecisionPoint)}
+                        className={`w-4 h-4 border flex items-center justify-center transition cursor-pointer rounded-sm ${item.isDecisionPoint ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-300 hover:border-orange-400'}`}
+                      >
+                        {item.isDecisionPoint && <span className="text-xs leading-none">✓</span>}
                       </button>
                     </td>
                   </tr>
@@ -186,7 +197,7 @@ function WbsTab({ projectId }: { projectId: string }) {
   );
 }
 
-// ── 회의 탭 ─────────────────────────────────────────────────────────────────
+// ── 회의 탭 ───────────────────────────────────────────────────────────────────
 function MeetingsTab({ projectId }: { projectId: string }) {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -215,27 +226,42 @@ function MeetingsTab({ projectId }: { projectId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <button onClick={() => setShowForm(!showForm)}
-          className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700">
-          + 회의 생성
-        </button>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="border border-orange-400 text-orange-600 px-3 py-1.5 rounded text-sm hover:bg-orange-50 transition cursor-pointer"
+        >+ 회의 생성</button>
       </div>
 
       {showForm && (
-        <form onSubmit={create} className="bg-gray-50 border rounded-xl p-4 space-y-3">
-          <input className="w-full border rounded-lg px-3 py-2 text-sm bg-white" placeholder="회의 제목 *" required
-            value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+        <form onSubmit={create} className="bg-gray-50 border border-gray-200 rounded p-4 space-y-3">
+          <input
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-orange-400"
+            placeholder="회의 제목 *"
+            required
+            value={form.title}
+            onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+          />
           <div className="flex gap-2">
-            <select className="flex-1 border rounded-lg px-3 py-2 text-sm bg-white"
-              value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+            <select
+              className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-orange-400 cursor-pointer"
+              value={form.type}
+              onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+            >
               {Object.entries(MEETING_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
-            <input type="datetime-local" className="flex-1 border rounded-lg px-3 py-2 text-sm bg-white" required
-              value={form.scheduledAt} onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))} />
+            <input
+              type="datetime-local"
+              className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-orange-400"
+              required
+              value={form.scheduledAt}
+              onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))}
+            />
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={() => setShowForm(false)} className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-100">취소</button>
-            <button type="submit" disabled={loading} className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50">
+            <button type="button" onClick={() => setShowForm(false)}
+              className="flex-1 border border-gray-300 rounded py-2 text-sm text-gray-600 hover:bg-white transition cursor-pointer">취소</button>
+            <button type="submit" disabled={loading}
+              className="flex-1 bg-orange-500 text-white rounded py-2 text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer">
               {loading ? '생성 중...' : '생성'}
             </button>
           </div>
@@ -243,25 +269,27 @@ function MeetingsTab({ projectId }: { projectId: string }) {
       )}
 
       {meetings.length === 0 ? (
-        <p className="text-center text-gray-400 py-10">회의가 없습니다</p>
+        <p className="text-center text-gray-400 text-sm py-10">회의가 없습니다</p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {meetings.map(m => {
             const st = MEETING_STATUS_LABEL[m.status];
             return (
-              <div key={m.id} className="bg-white border rounded-xl px-4 py-3 flex items-center gap-3">
-                <span className={`text-xs px-2 py-0.5 rounded-full ${MEETING_TYPE_COLOR[m.type]}`}>{MEETING_TYPE_LABEL[m.type]}</span>
-                <span className="flex-1 font-medium text-gray-800 truncate">{m.title}</span>
+              <div key={m.id} className="bg-white border border-gray-200 rounded px-4 py-2.5 flex items-center gap-3">
+                <span className={`text-xs px-1.5 py-0.5 border rounded ${MEETING_TYPE_COLOR[m.type]}`}>
+                  {MEETING_TYPE_LABEL[m.type]}
+                </span>
+                <span className="flex-1 text-sm font-medium text-gray-800 truncate">{m.title}</span>
                 <span className="text-xs text-gray-400">{new Date(m.scheduledAt).toLocaleDateString('ko-KR')}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>
+                <span className={`text-xs px-1.5 py-0.5 border rounded ${st.cls}`}>{st.label}</span>
                 {m.status !== 'COMPLETED' && (
-                  <button onClick={() => complete(m.id)}
-                    className="text-xs border border-green-600 text-green-600 px-2 py-0.5 rounded hover:bg-green-50">
-                    완료 처리
-                  </button>
+                  <button
+                    onClick={() => complete(m.id)}
+                    className="text-xs border border-gray-300 text-gray-600 px-2 py-0.5 rounded hover:bg-gray-50 transition cursor-pointer"
+                  >완료 처리</button>
                 )}
                 {m.status === 'COMPLETED' && m.achievementRate !== undefined && (
-                  <span className="text-xs text-gray-500">{m.achievementRate}%</span>
+                  <span className="text-xs text-gray-400">{m.achievementRate}%</span>
                 )}
               </div>
             );
@@ -272,33 +300,36 @@ function MeetingsTab({ projectId }: { projectId: string }) {
   );
 }
 
-// ── 팀원 탭 ─────────────────────────────────────────────────────────────────
+// ── 팀원 탭 ───────────────────────────────────────────────────────────────────
 const ROLE_COLOR: Record<string, string> = {
-  PM: 'bg-blue-100 text-blue-700', DEVELOPER: 'bg-gray-100 text-gray-700',
-  DESIGNER: 'bg-pink-100 text-pink-700', QA: 'bg-yellow-100 text-yellow-700',
-  DEVOPS: 'bg-orange-100 text-orange-700', OTHER: 'bg-gray-100 text-gray-500',
+  PM: 'bg-orange-50 text-orange-600 border-orange-200',
+  DEVELOPER: 'bg-gray-50 text-gray-700 border-gray-200',
+  DESIGNER: 'bg-pink-50 text-pink-700 border-pink-200',
+  QA: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+  DEVOPS: 'bg-red-50 text-red-600 border-red-200',
+  OTHER: 'bg-gray-50 text-gray-500 border-gray-200',
 };
 
 function MembersTab({ project }: { project: Project }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       {project.members.map(m => (
-        <div key={m.id} className="bg-white border rounded-xl px-4 py-3 flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-medium">
+        <div key={m.id} className="bg-white border border-gray-200 rounded px-4 py-3 flex items-center gap-3">
+          <div className="w-7 h-7 bg-orange-500 text-white rounded-full flex items-center justify-center text-xs font-semibold shrink-0">
             {m.user?.name?.[0] ?? '?'}
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-800">{m.user?.name}</p>
-            <p className="text-xs text-gray-400">{m.user?.email}</p>
+            <p className="text-xs text-gray-400 truncate">{m.user?.email}</p>
           </div>
-          <span className={`text-xs px-2 py-0.5 rounded-full ${ROLE_COLOR[m.role]}`}>{m.role}</span>
+          <span className={`text-xs px-1.5 py-0.5 border rounded ${ROLE_COLOR[m.role]}`}>{m.role}</span>
         </div>
       ))}
     </div>
   );
 }
 
-// ── Action Items 탭 ──────────────────────────────────────────────────────────
+// ── Action Items 탭 ───────────────────────────────────────────────────────────
 function ActionItemsTab({ projectId, members }: { projectId: string; members: Project['members'] }) {
   const [items, setItems] = useState<ActionItem[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -327,28 +358,44 @@ function ActionItemsTab({ projectId, members }: { projectId: string; members: Pr
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <button onClick={() => setShowForm(!showForm)}
-          className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700">
-          + Action Item
-        </button>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="border border-orange-400 text-orange-600 px-3 py-1.5 rounded text-sm hover:bg-orange-50 transition cursor-pointer"
+        >+ Action Item</button>
       </div>
 
       {showForm && (
-        <form onSubmit={create} className="bg-gray-50 border rounded-xl p-4 space-y-3">
-          <input className="w-full border rounded-lg px-3 py-2 text-sm bg-white" placeholder="제목 *" required
-            value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+        <form onSubmit={create} className="bg-gray-50 border border-gray-200 rounded p-4 space-y-3">
+          <input
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-orange-400"
+            placeholder="제목 *"
+            required
+            value={form.title}
+            onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+          />
           <div className="flex gap-2">
-            <select className="flex-1 border rounded-lg px-3 py-2 text-sm bg-white" required
-              value={form.assigneeId} onChange={e => setForm(f => ({ ...f, assigneeId: e.target.value }))}>
+            <select
+              className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-orange-400 cursor-pointer"
+              required
+              value={form.assigneeId}
+              onChange={e => setForm(f => ({ ...f, assigneeId: e.target.value }))}
+            >
               <option value="">담당자 선택 *</option>
               {members.map(m => <option key={m.userId} value={m.userId}>{m.user?.name}</option>)}
             </select>
-            <input type="date" className="flex-1 border rounded-lg px-3 py-2 text-sm bg-white" required
-              value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
+            <input
+              type="date"
+              className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-orange-400"
+              required
+              value={form.dueDate}
+              onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))}
+            />
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={() => setShowForm(false)} className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-100">취소</button>
-            <button type="submit" disabled={loading} className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50">
+            <button type="button" onClick={() => setShowForm(false)}
+              className="flex-1 border border-gray-300 rounded py-2 text-sm text-gray-600 hover:bg-white transition cursor-pointer">취소</button>
+            <button type="submit" disabled={loading}
+              className="flex-1 bg-orange-500 text-white rounded py-2 text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer">
               {loading ? '추가 중...' : '추가'}
             </button>
           </div>
@@ -356,17 +403,23 @@ function ActionItemsTab({ projectId, members }: { projectId: string; members: Pr
       )}
 
       {items.length === 0 ? (
-        <p className="text-center text-gray-400 py-10">Action Item이 없습니다</p>
+        <p className="text-center text-gray-400 text-sm py-10">Action Item이 없습니다</p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {items.map(item => (
-            <div key={item.id} className={`bg-white border rounded-xl px-4 py-3 flex items-center gap-3 ${item.status === 'COMPLETED' ? 'opacity-60' : ''}`}>
-              <button onClick={() => toggle(item.id)}
-                className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition ${item.status === 'COMPLETED' ? 'bg-green-600 border-green-600 text-white' : 'border-gray-300'}`}>
-                {item.status === 'COMPLETED' && <span className="text-xs">✓</span>}
+            <div key={item.id} className={`bg-white border border-gray-200 rounded px-4 py-2.5 flex items-center gap-3 ${item.status === 'COMPLETED' ? 'opacity-50' : ''}`}>
+              <button
+                onClick={() => toggle(item.id)}
+                className={`w-4 h-4 border flex items-center justify-center shrink-0 transition cursor-pointer rounded-sm ${item.status === 'COMPLETED' ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-300 hover:border-orange-400'}`}
+              >
+                {item.status === 'COMPLETED' && <span className="text-xs leading-none">✓</span>}
               </button>
-              <span className={`flex-1 text-sm ${item.status === 'COMPLETED' ? 'line-through text-gray-400' : 'text-gray-800'}`}>{item.title}</span>
-              {item.isCarriedOver && <span className="text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded">이월</span>}
+              <span className={`flex-1 text-sm ${item.status === 'COMPLETED' ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                {item.title}
+              </span>
+              {item.isCarriedOver && (
+                <span className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded">이월</span>
+              )}
               <span className="text-xs text-gray-400">{item.assignee?.name}</span>
               <span className="text-xs text-gray-400">{item.dueDate}</span>
             </div>
@@ -377,7 +430,7 @@ function ActionItemsTab({ projectId, members }: { projectId: string; members: Pr
   );
 }
 
-// ── 메인 페이지 ──────────────────────────────────────────────────────────────
+// ── 메인 페이지 ───────────────────────────────────────────────────────────────
 const TABS: { key: Tab; label: string }[] = [
   { key: 'wbs', label: 'WBS' },
   { key: 'meetings', label: '회의' },
@@ -386,8 +439,8 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 const PROJECT_STATUS: Record<string, { label: string; cls: string }> = {
-  ACTIVE: { label: '진행 중', cls: 'bg-green-100 text-green-700' },
-  ARCHIVED: { label: '완료', cls: 'bg-gray-100 text-gray-600' },
+  ACTIVE: { label: '진행 중', cls: 'bg-orange-50 text-orange-600 border border-orange-200' },
+  ARCHIVED: { label: '완료', cls: 'bg-gray-50 text-gray-500 border border-gray-200' },
 };
 
 export default function ProjectDetailPage() {
@@ -402,7 +455,7 @@ export default function ProjectDetailPage() {
   if (!project) {
     return (
       <div className="flex justify-center py-20">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -411,28 +464,35 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-1">
-          <h2 className="text-2xl font-bold text-gray-800">{project.name}</h2>
-          <span className={`text-sm px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>
+      {/* 헤더 */}
+      <div className="mb-5 pb-4 border-b border-gray-200">
+        <div className="flex items-center gap-2.5 mb-0.5">
+          <h2 className="text-lg font-semibold text-gray-900">{project.name}</h2>
+          <span className={`text-xs px-1.5 py-0.5 border rounded ${st.cls}`}>{st.label}</span>
         </div>
-        {project.description && <p className="text-gray-500 text-sm">{project.description}</p>}
+        {project.description && (
+          <p className="text-sm text-gray-500 mt-1">{project.description}</p>
+        )}
         {project.startDate && (
           <p className="text-xs text-gray-400 mt-1">{project.startDate} ~ {project.endDate ?? '미정'}</p>
         )}
       </div>
 
-      <div className="border-b mb-6">
-        <div className="flex gap-1">
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition -mb-px ${
-                tab === t.key ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}>
-              {t.label}
-            </button>
-          ))}
-        </div>
+      {/* 탭 */}
+      <div className="flex border-b border-gray-200 mb-5">
+        {TABS.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition cursor-pointer ${
+              tab === t.key
+                ? 'border-orange-500 text-orange-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {tab === 'wbs' && <WbsTab projectId={project.id} />}
