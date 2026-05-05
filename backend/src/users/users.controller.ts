@@ -1,18 +1,13 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
-  HttpCode,
-  Param,
   Patch,
-  Post,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from './entities/user.entity';
-import { CreateIntegrationDto } from './dto/create-integration.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 
@@ -31,25 +26,8 @@ export class UsersController {
     return this.usersService.updateMe(user.id, dto);
   }
 
-  @Post('integrations')
-  createIntegration(
-    @CurrentUser() user: User,
-    @Body() dto: CreateIntegrationDto,
-  ) {
-    return this.usersService.createIntegration(user.id, dto);
-  }
-
-  @Get('integrations')
-  getIntegrations(@CurrentUser() user: User) {
-    return this.usersService.getIntegrations(user.id);
-  }
-
-  @Delete('integrations/:integrationId')
-  @HttpCode(204)
-  deleteIntegration(
-    @CurrentUser() user: User,
-    @Param('integrationId') integrationId: string,
-  ) {
-    return this.usersService.deleteIntegration(user.id, integrationId);
-  }
+  // TODO: 외부 서비스 연동 API (Naver Works, Notion) — 미개발 범위
+  // @Post('integrations') createIntegration(...)
+  // @Get('integrations') getIntegrations(...)
+  // @Delete('integrations/:integrationId') deleteIntegration(...)
 }
