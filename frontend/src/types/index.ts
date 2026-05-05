@@ -62,6 +62,13 @@ export interface ProjectWbs {
   items: WbsItem[];
 }
 
+export interface MeetingChecklist {
+  id: string;
+  content: string;
+  isDone: boolean;
+  order: number;
+}
+
 export interface Meeting {
   id: string;
   projectId: string;
@@ -71,7 +78,20 @@ export interface Meeting {
   scheduledAt: string;
   completedAt?: string;
   achievementRate?: number;
-  checklists?: { id: string; content: string; isDone: boolean; order: number }[];
+  summary?: string;
+  checklists?: MeetingChecklist[];
+}
+
+export interface MeetingMetrics {
+  achievementRate: number;
+  summary?: string;
+  completedAt: string;
+  checklists: MeetingChecklist[];
+}
+
+export interface MeetingBriefing {
+  previousMeeting?: Pick<Meeting, 'id' | 'title' | 'completedAt'>;
+  carriedOverItems: ActionItem[];
 }
 
 export interface ActionItem {

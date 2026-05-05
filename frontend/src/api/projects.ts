@@ -11,7 +11,7 @@ export const projectsApi = {
   get: (id: string) =>
     client.get<Project>(`/projects/${id}`).then(r => r.data),
 
-  update: (id: string, data: Partial<{ name: string; description: string; status: string }>) =>
+  update: (id: string, data: Partial<{ name: string; description: string; startDate: string; endDate: string; status: string }>) =>
     client.patch<Project>(`/projects/${id}`, data).then(r => r.data),
 
   delete: (id: string) =>
@@ -23,6 +23,9 @@ export const projectsApi = {
 
   addMember: (projectId: string, data: { userId: string; role: string }) =>
     client.post<ProjectMember>(`/projects/${projectId}/members`, data).then(r => r.data),
+
+  updateMember: (projectId: string, memberId: string, data: { role: string }) =>
+    client.patch<ProjectMember>(`/projects/${projectId}/members/${memberId}`, data).then(r => r.data),
 
   removeMember: (projectId: string, memberId: string) =>
     client.delete(`/projects/${projectId}/members/${memberId}`),
