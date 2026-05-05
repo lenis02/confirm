@@ -1,0 +1,17 @@
+# Claude Code 로컬 설정 (환경별로 다름)
+.claude/settings.local.json
+
+# 환경변수
+.env
+.env.*
+!.env.example
+
+# 의존성
+node_modules/
+
+# 빌드 결과물
+dist/
+
+# 로그
+*.log
+npm-debug.log*
