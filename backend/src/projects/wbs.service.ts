@@ -47,24 +47,29 @@ export class WbsService {
     const wbs = this.wbsRepo.create({
       projectId,
       documentId,
-      projectSummary: result.projectSummary,
+      projectSummary: result.project_context.background_and_goals,
+      totalDuration: result.project_context.total_duration,
+      teamResources: result.project_context.team_resources,
       status: WbsStatus.DRAFT,
     });
     const savedWbs = await this.wbsRepo.save(wbs);
 
-    const items: WbsItem[] = result.items.map((raw) => {
+    const items: WbsItem[] = result.wbs_tasks.map((raw, index) => {
       const item = new WbsItem();
       item.wbsId = savedWbs.id;
       item.projectId = projectId;
-      item.order = raw.order;
-      item.phase = raw.phase;
-      item.title = raw.title;
-      item.description = raw.description;
-      item.assignedRole = raw.assignedRole;
-      item.durationDays = raw.durationDays;
-      item.startDate = raw.startDate ? new Date(raw.startDate) : null;
-      item.endDate = raw.endDate ? new Date(raw.endDate) : null;
-      item.isDecisionPoint = raw.isDecisionPoint;
+      item.order = index + 1;
+      item.taskId = raw.task_id;
+      item.title = raw.task_name;
+      item.phase = raw.department;
+      item.assignedRole = raw.department;
+      item.complexity = raw.complexity;
+      item.durationDays = raw.duration_days;
+      item.startDate = raw.start_date && !raw.start_date.startsWith('D+') ? new Date(raw.start_date) : null;
+      item.endDate = raw.end_date && !raw.end_date.startsWith('D+') ? new Date(raw.end_date) : null;
+      item.dependencies = raw.dependencies ?? [];
+      item.reasoning = raw.reasoning;
+      item.isDecisionPoint = false;
       return item;
     });
     await this.itemRepo.save(items);

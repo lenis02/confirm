@@ -36,11 +36,23 @@ export class WbsItem {
   @Column({ type: 'text', nullable: true })
   description: string;
 
+  @Column({ name: 'task_id', nullable: true })
+  taskId: string;
+
+  @Column({ nullable: true })
+  complexity: string;
+
+  @Column({ type: 'simple-array', nullable: true })
+  dependencies: string[];
+
   @Column({ name: 'assigned_role' })
   assignedRole: string;
 
   @Column({ name: 'duration_days', type: 'int' })
   durationDays: number;
+
+  @Column({ type: 'text', nullable: true })
+  reasoning: string;
 
   @Column({ name: 'start_date', type: 'date', nullable: true })
   startDate: Date | null;
