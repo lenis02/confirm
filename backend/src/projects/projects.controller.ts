@@ -8,8 +8,12 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
@@ -18,12 +22,21 @@ import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { ProjectStatus } from './entities/project.entity';
+import { DocumentStatus } from './entities/document.entity';
 import { ProjectsService } from './projects.service';
+import { DocumentsService } from './documents.service';
+import { WbsService, UpdateWbsItemDto } from './wbs.service';
 
 @Controller('projects')
 @UseGuards(JwtAuthGuard)
 export class ProjectsController {
-  constructor(private readonly projectsService: ProjectsService) {}
+  constructor(
+    private readonly projectsService: ProjectsService,
+    private readonly documentsService: DocumentsService,
+    private readonly wbsService: WbsService,
+  ) {}
+
+  // --- projects ---
 
   @Post()
   create(@CurrentUser() user: User, @Body() dto: CreateProjectDto) {
@@ -89,5 +102,65 @@ export class ProjectsController {
     @Param('memberId') memberId: string,
   ) {
     return this.projectsService.removeMember(user.id, projectId, memberId);
+  }
+
+  // --- documents ---
+
+  @Post(':projectId/documents')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  uploadDocument(
+    @CurrentUser() user: User,
+    @Param('projectId') projectId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.documentsService.upload(user.id, projectId, file);
+  }
+
+  @Get(':projectId/documents')
+  findDocuments(
+    @CurrentUser() user: User,
+    @Param('projectId') projectId: string,
+    @Query('status') status?: DocumentStatus,
+  ) {
+    return this.documentsService.findAll(user.id, projectId, status);
+  }
+
+  @Get(':projectId/documents/:documentId')
+  findDocument(
+    @CurrentUser() user: User,
+    @Param('projectId') projectId: string,
+    @Param('documentId') documentId: string,
+  ) {
+    return this.documentsService.findOne(user.id, projectId, documentId);
+  }
+
+  // --- wbs ---
+
+  @Get(':projectId/wbs')
+  getWbs(@CurrentUser() user: User, @Param('projectId') projectId: string) {
+    return this.wbsService.findWbs(projectId, user.id);
+  }
+
+  @Patch(':projectId/wbs')
+  confirmWbs(@CurrentUser() user: User, @Param('projectId') projectId: string) {
+    return this.wbsService.confirmWbs(user.id, projectId);
+  }
+
+  @Patch(':projectId/wbs/:milestoneId')
+  updateWbsItem(
+    @CurrentUser() user: User,
+    @Param('projectId') projectId: string,
+    @Param('milestoneId') milestoneId: string,
+    @Body() dto: UpdateWbsItemDto,
+  ) {
+    return this.wbsService.updateItem(user.id, projectId, milestoneId, dto);
+  }
+
+  @Get(':projectId/meeting-recommendations')
+  getMeetingRecommendations(
+    @CurrentUser() user: User,
+    @Param('projectId') projectId: string,
+  ) {
+    return this.wbsService.getMeetingRecommendations(user.id, projectId);
   }
 }
