@@ -1,4 +1,12 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateMeetingDto } from './create-meeting.dto';
+import { IsDateString, IsOptional, IsString, MinLength } from 'class-validator';
 
-export class UpdateMeetingDto extends PartialType(CreateMeetingDto) {}
+export class UpdateMeetingDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  title?: string;
+
+  @IsOptional()
+  @IsDateString()
+  scheduledAt?: string;
+}
