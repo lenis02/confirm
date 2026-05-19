@@ -3,8 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse');
+import { PDFParse } from 'pdf-parse';
 import { ProjectsService } from './projects.service';
 import { WbsService } from './wbs.service';
 import { Document, DocumentStatus } from './entities/document.entity';
@@ -74,9 +73,7 @@ export class DocumentsService {
     try {
       await this.documentRepo.update(documentId, { status: DocumentStatus.IN_PROGRESS });
 
-      const fileBuffer = fs.readFileSync(document.filePath);
-      const pdfData = await pdfParse(fileBuffer);
-      const text = pdfData.text;
+      const text = await this.extractPdfText(document.filePath);
 
       await this.documentRepo.update(documentId, { parsedContent: text });
       await this.wbsService.generateFromDocument(document.projectId, documentId, text);
@@ -87,6 +84,17 @@ export class DocumentsService {
         status: DocumentStatus.FAILED,
         errorMessage: err instanceof Error ? err.message : '알 수 없는 오류',
       });
+    }
+  }
+
+  private async extractPdfText(filePath: string): Promise<string> {
+    const fileBuffer = fs.readFileSync(filePath);
+    const parser = new PDFParse({ data: fileBuffer });
+    try {
+      const result = await parser.getText();
+      return result.text;
+    } finally {
+      await parser.destroy();
     }
   }
 }
