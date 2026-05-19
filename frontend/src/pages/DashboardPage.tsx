@@ -1,17 +1,34 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi } from '../api/dashboard';
-import type { CalendarWeek, Meeting, ActionItem } from '../types';
+import type { CalendarWeek } from '../types';
+// import type { CalendarWeek, Meeting, ActionItem } from '../types';
 
 const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
 
 const MEETING_TYPE_LABEL: Record<string, string> = {
-  KICKOFF: '킥오프', PROGRESS_CHECK: '진도점검', ISSUE_CHECK: '이슈체크', CONSENSUS: '합의',
+  KICKOFF: '킥오프',
+  PROGRESS_CHECK: '진도점검',
+  ISSUE_CHECK: '이슈체크',
+  CONSENSUS: '합의',
 };
 
 type DayEvent =
-  | { kind: 'meeting'; id: string; title: string; type: string; status: string; projectName: string }
-  | { kind: 'action'; id: string; title: string; status: string; projectName: string };
+  | {
+      kind: 'meeting';
+      id: string;
+      title: string;
+      type: string;
+      status: string;
+      projectName: string;
+    }
+  | {
+      kind: 'action';
+      id: string;
+      title: string;
+      status: string;
+      projectName: string;
+    };
 
 function getMonthGrid(year: number, month: number): Date[] {
   const firstDay = new Date(year, month, 1);
@@ -37,12 +54,25 @@ function buildEventMap(weeks: CalendarWeek[]): Record<string, DayEvent[]> {
         if (seenMeetings.has(m.id)) continue;
         seenMeetings.add(m.id);
         const date = m.scheduledAt.split('T')[0];
-        (map[date] ??= []).push({ kind: 'meeting', id: m.id, title: m.title, type: m.type, status: m.status, projectName: p.name });
+        (map[date] ??= []).push({
+          kind: 'meeting',
+          id: m.id,
+          title: m.title,
+          type: m.type,
+          status: m.status,
+          projectName: p.name,
+        });
       }
       for (const a of p.actionItems) {
         if (seenActions.has(a.id)) continue;
         seenActions.add(a.id);
-        (map[a.dueDate] ??= []).push({ kind: 'action', id: a.id, title: a.title, status: a.status, projectName: p.name });
+        (map[a.dueDate] ??= []).push({
+          kind: 'action',
+          id: a.id,
+          title: a.title,
+          status: a.status,
+          projectName: p.name,
+        });
       }
     }
   }
@@ -62,11 +92,12 @@ export default function DashboardPage() {
   useEffect(() => {
     setLoading(true);
     const grid = getMonthGrid(year, month);
-    const mondayStrs = Array.from({ length: 6 }, (_, i) =>
-      grid[i * 7].toISOString().split('T')[0]
+    const mondayStrs = Array.from(
+      { length: 6 },
+      (_, i) => grid[i * 7].toISOString().split('T')[0],
     );
-    Promise.all(mondayStrs.map(w => dashboardApi.getCalendar(w)))
-      .then(weeks => setEventMap(buildEventMap(weeks)))
+    Promise.all(mondayStrs.map((w) => dashboardApi.getCalendar(w)))
+      .then((weeks) => setEventMap(buildEventMap(weeks)))
       .finally(() => setLoading(false));
   }, [year, month]);
 
@@ -82,25 +113,36 @@ export default function DashboardPage() {
   };
 
   const grid = getMonthGrid(year, month);
-  const monthLabel = new Date(year, month, 1).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' });
+  const monthLabel = new Date(year, month, 1).toLocaleDateString('ko-KR', {
+    year: 'numeric',
+    month: 'long',
+  });
 
   return (
     <div className="p-6 flex flex-col gap-4 h-full">
       {/* 헤더 */}
       <div className="flex items-center gap-2">
-        <h2 className="text-base font-semibold text-gray-800 mr-1">{monthLabel}</h2>
+        <h2 className="text-base font-semibold text-gray-800 mr-1">
+          {monthLabel}
+        </h2>
         <button
           onClick={() => moveMonth(-1)}
           className="w-7 h-7 flex items-center justify-center border border-gray-300 rounded text-gray-500 hover:bg-gray-100 transition cursor-pointer"
-        >‹</button>
+        >
+          ‹
+        </button>
         <button
           onClick={() => moveMonth(1)}
           className="w-7 h-7 flex items-center justify-center border border-gray-300 rounded text-gray-500 hover:bg-gray-100 transition cursor-pointer"
-        >›</button>
+        >
+          ›
+        </button>
         <button
           onClick={goToday}
           className="ml-auto text-xs border border-gray-300 px-2.5 py-1 rounded text-gray-600 hover:bg-gray-100 transition cursor-pointer"
-        >오늘</button>
+        >
+          오늘
+        </button>
       </div>
 
       {loading ? (
@@ -122,7 +164,10 @@ export default function DashboardPage() {
           </div>
 
           {/* 날짜 그리드 (6주) */}
-          <div className="grid grid-cols-7" style={{ gridTemplateRows: 'repeat(6, minmax(0, 1fr))' }}>
+          <div
+            className="grid grid-cols-7"
+            style={{ gridTemplateRows: 'repeat(6, minmax(0, 1fr))' }}
+          >
             {grid.map((date, i) => {
               const dateStr = date.toISOString().split('T')[0];
               const isToday = dateStr === todayStr;
@@ -143,7 +188,9 @@ export default function DashboardPage() {
                   ].join(' ')}
                 >
                   <div className="mb-1 flex justify-end">
-                    <span className={`text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full ${isToday ? 'bg-orange-500 text-white' : isWeekend ? 'text-red-400' : 'text-gray-500'}`}>
+                    <span
+                      className={`text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full ${isToday ? 'bg-orange-500 text-white' : isWeekend ? 'text-red-400' : 'text-gray-500'}`}
+                    >
                       {date.getDate()}
                     </span>
                   </div>
@@ -167,10 +214,12 @@ export default function DashboardPage() {
                         >
                           · {ev.title}
                         </div>
-                      )
+                      ),
                     )}
                     {events.length > 3 && (
-                      <div className="text-xs text-gray-400 px-1.5">+{events.length - 3}개</div>
+                      <div className="text-xs text-gray-400 px-1.5">
+                        +{events.length - 3}개
+                      </div>
                     )}
                   </div>
                 </div>
