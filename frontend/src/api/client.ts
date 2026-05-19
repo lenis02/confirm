@@ -31,6 +31,7 @@ client.interceptors.response.use(
           window.location.href = '/login';
         }
       } else {
+        localStorage.clear();
         window.location.href = '/login';
       }
     }
