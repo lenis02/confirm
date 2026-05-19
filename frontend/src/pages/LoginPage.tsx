@@ -7,7 +7,7 @@ export default function LoginPage() {
           <p className="text-gray-400 text-sm">PM을 위한 AI 프로젝트 어시스턴트</p>
         </div>
         <a
-          href="http://localhost:3000/api/auth/google"
+          href={`${import.meta.env.VITE_API_URL}/auth/google`}
           className="flex items-center justify-center gap-3 w-full border border-gray-300 rounded px-4 py-2.5 text-sm text-gray-700 font-medium hover:bg-gray-50 transition cursor-pointer"
         >
           <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
