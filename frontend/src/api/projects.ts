@@ -43,6 +43,9 @@ export const projectsApi = {
   getDocument: (projectId: string, documentId: string) =>
     client.get<Document>(`/projects/${projectId}/documents/${documentId}`).then(r => r.data),
 
+  deleteDocument: (projectId: string, documentId: string) =>
+    client.delete(`/projects/${projectId}/documents/${documentId}`),
+
   // wbs
   getWbs: (projectId: string) =>
     client.get<ProjectWbs>(`/projects/${projectId}/wbs`).then(r => r.data),

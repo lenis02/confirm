@@ -134,6 +134,16 @@ export class ProjectsController {
     return this.documentsService.findOne(user.id, projectId, documentId);
   }
 
+  @Delete(':projectId/documents/:documentId')
+  @HttpCode(204)
+  removeDocument(
+    @CurrentUser() user: User,
+    @Param('projectId') projectId: string,
+    @Param('documentId') documentId: string,
+  ) {
+    return this.documentsService.remove(user.id, projectId, documentId);
+  }
+
   // --- wbs ---
 
   @Get(':projectId/wbs')
