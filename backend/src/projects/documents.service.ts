@@ -31,14 +31,16 @@ export class DocumentsService {
   ): Promise<Document> {
     await this.projectsService.findOne(userId, projectId);
 
-    const fileName = `${Date.now()}-${file.originalname}`;
+    // multipart 파일명은 multer가 latin1로 디코딩하므로 UTF-8로 복원 (한글 깨짐 방지)
+    const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    const fileName = `${Date.now()}-${originalName}`;
     const filePath = path.join(this.uploadDir, fileName);
     fs.writeFileSync(filePath, file.buffer);
 
     const document = this.documentRepo.create({
       projectId,
       uploadedById: userId,
-      fileName: file.originalname,
+      fileName: originalName,
       fileSize: file.size,
       mimeType: file.mimetype,
       filePath,
@@ -66,6 +68,16 @@ export class DocumentsService {
     return document;
   }
 
+  async remove(userId: string, projectId: string, documentId: string): Promise<void> {
+    const document = await this.findOne(userId, projectId, documentId);
+    // 디스크 파일 삭제 — Render 등 ephemeral 환경에선 이미 없을 수 있어 존재 시에만
+    if (fs.existsSync(document.filePath)) {
+      fs.unlinkSync(document.filePath);
+    }
+    // documents 행 삭제 — project_wbs.document_id는 FK onDelete:SET NULL로 자동 처리
+    await this.documentRepo.delete(documentId);
+  }
+
   private async processDocument(documentId: string): Promise<void> {
     const document = await this.documentRepo.findOne({ where: { id: documentId } });
     if (!document) return;
@@ -76,6 +88,11 @@ export class DocumentsService {
       const text = await this.extractPdfText(document.filePath);
 
       await this.documentRepo.update(documentId, { parsedContent: text });
+
+      // 분석 도중 취소(삭제)된 문서면 WBS 생성·덮어쓰기를 중단
+      const stillExists = await this.documentRepo.findOne({ where: { id: documentId } });
+      if (!stillExists) return;
+
       await this.wbsService.generateFromDocument(document.projectId, documentId, text);
       await this.documentRepo.update(documentId, { status: DocumentStatus.COMPLETED });
     } catch (err) {
