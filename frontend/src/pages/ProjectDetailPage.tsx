@@ -43,6 +43,7 @@ function WbsTab({ projectId }: { projectId: string }) {
   const [wbs, setWbs] = useState<ProjectWbs | null>(null);
   const [wbsError, setWbsError] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval>>();
@@ -69,12 +70,25 @@ function WbsTab({ projectId }: { projectId: string }) {
     }
   }, [docs, projectId]);
 
-  const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const uploadFile = async (file: File) => {
     setUploading(true); setWbsError(false);
     try { await projectsApi.uploadDocument(projectId, file); await loadDocs(); }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
+  };
+
+  const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadFile(file);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    if (uploading || isProcessing) return;
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (isPdf) uploadFile(file);
   };
 
   const confirm = async () => {
@@ -92,9 +106,25 @@ function WbsTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="border-2 border-dashed border-gray-200 rounded p-5 text-center bg-gray-50">
-        <p className="text-xs text-gray-400 mb-3">수행계획서(PDF)를 업로드하면 AI가 WBS를 자동 생성합니다</p>
-        <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={upload} />
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+        className={`border-2 rounded p-5 text-center transition ${
+          dragging
+            ? 'border-solid border-orange-400 bg-orange-50'
+            : 'border-dashed border-gray-200 bg-gray-50'
+        }`}
+      >
+        <svg
+          className={`w-8 h-8 mx-auto mb-2 transition ${dragging ? 'text-orange-500' : 'text-gray-300'}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round"
+            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+        </svg>
+        <p className="text-xs text-gray-400 mb-3">수행계획서(PDF)를 끌어다 놓거나 선택하면 AI가 WBS를 자동 생성합니다</p>
+        <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={onInputChange} />
         <button onClick={() => fileRef.current?.click()} disabled={uploading || isProcessing}
           className="border border-orange-400 text-orange-600 px-4 py-1.5 rounded text-sm hover:bg-orange-50 transition disabled:opacity-50 cursor-pointer">
           {uploading ? '업로드 중...' : '파일 선택'}
