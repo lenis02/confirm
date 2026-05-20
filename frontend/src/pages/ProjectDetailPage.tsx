@@ -28,6 +28,20 @@ const COMPLEXITY_COLOR: Record<string, string> = {
   Medium: 'bg-yellow-50 text-yellow-700 border-yellow-200',
   Low: 'bg-green-50 text-green-700 border-green-200',
 };
+const COMPLEXITY_RANK: Record<string, number> = { Low: 1, Medium: 2, High: 3 };
+
+type WbsSortKey = 'id' | 'title' | 'assignedRole' | 'complexity' | 'durationDays' | 'startDate' | 'endDate';
+
+const WBS_COLUMNS: { key: WbsSortKey | null; label: string }[] = [
+  { key: 'id', label: 'ID' },
+  { key: 'title', label: '태스크명' },
+  { key: 'assignedRole', label: '부서' },
+  { key: 'complexity', label: '복잡도' },
+  { key: 'durationDays', label: '기간' },
+  { key: 'startDate', label: '시작일' },
+  { key: 'endDate', label: '종료일' },
+  { key: null, label: '확인' },
+];
 const ROLE_COLOR: Record<string, string> = {
   PM: 'bg-orange-50 text-orange-600 border-orange-200',
   DEVELOPER: 'bg-gray-50 text-gray-700 border-gray-200',
@@ -36,6 +50,19 @@ const ROLE_COLOR: Record<string, string> = {
   DEVOPS: 'bg-red-50 text-red-600 border-red-200',
   OTHER: 'bg-gray-50 text-gray-500 border-gray-200',
 };
+
+type BarColor = { bg: string; text: string; border: string };
+
+const ROLE_BAR_PALETTE: BarColor[] = [
+  { bg: '#FECACA', text: '#991B1B', border: '#F87171' }, // 🔴 red 200/400 + text 800
+  { bg: '#FDE68A', text: '#92400E', border: '#FBBF24' }, // 🟡 amber 200/400 + text 800
+  { bg: '#A7F3D0', text: '#065F46', border: '#34D399' }, // 🟢 emerald 200/400 + text 800
+  { bg: '#BAE6FD', text: '#075985', border: '#38BDF8' }, // 🔵 sky 200/400 + text 800
+  { bg: '#DDD6FE', text: '#5B21B6', border: '#A78BFA' }, // 🟣 violet 200/400 + text 800
+  { bg: '#FBCFE8', text: '#9D174D', border: '#F472B6' }, // 🌸 pink 200/400 + text 800
+];
+
+const FALLBACK_BAR_COLOR: BarColor = { bg: '#E5E7EB', text: '#374151', border: '#9CA3AF' };
 
 // ── WBS 탭 ────────────────────────────────────────────────────────────────────
 function WbsTab({ projectId }: { projectId: string }) {
@@ -48,6 +75,9 @@ function WbsTab({ projectId }: { projectId: string }) {
   const [modalItem, setModalItem] = useState<WbsItem | null>(null);
   const [itemForm, setItemForm] = useState({ title: '', assignedRole: '', durationDays: 0, startDate: '', endDate: '', isDecisionPoint: false });
   const [savingItem, setSavingItem] = useState(false);
+  const [sortKey, setSortKey] = useState<WbsSortKey>('id');
+  const [sortAsc, setSortAsc] = useState(true);
+  const [viewMode, setViewMode] = useState<'table' | 'chart'>('table');
   const fileRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval>>();
 
@@ -140,6 +170,27 @@ function WbsTab({ projectId }: { projectId: string }) {
 
   const isProcessing = docs.some(d => d.status === 'PENDING' || d.status === 'IN_PROGRESS');
 
+  const handleSort = (key: WbsSortKey) => {
+    if (key === sortKey) setSortAsc(a => !a);
+    else { setSortKey(key); setSortAsc(true); }
+  };
+
+  const sortedItems = wbs
+    ? [...wbs.items].sort((a, b) => {
+        let cmp = 0;
+        switch (sortKey) {
+          case 'id': cmp = a.order - b.order; break;
+          case 'title': cmp = a.title.localeCompare(b.title); break;
+          case 'assignedRole': cmp = (a.assignedRole ?? '').localeCompare(b.assignedRole ?? ''); break;
+          case 'complexity': cmp = (COMPLEXITY_RANK[a.complexity ?? ''] ?? 0) - (COMPLEXITY_RANK[b.complexity ?? ''] ?? 0); break;
+          case 'durationDays': cmp = (a.durationDays ?? 0) - (b.durationDays ?? 0); break;
+          case 'startDate': cmp = (a.startDate ?? '').localeCompare(b.startDate ?? ''); break;
+          case 'endDate': cmp = (a.endDate ?? '').localeCompare(b.endDate ?? ''); break;
+        }
+        return sortAsc ? cmp : -cmp;
+      })
+    : [];
+
   return (
     <div className="space-y-4">
       <div
@@ -200,6 +251,16 @@ function WbsTab({ projectId }: { projectId: string }) {
               <span className={`text-xs px-1.5 py-0.5 border rounded ${wbs.status === 'CONFIRMED' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
                 {wbs.status === 'CONFIRMED' ? '확정' : '초안'}
               </span>
+              <div className="inline-flex border border-gray-200 rounded overflow-hidden ml-1">
+                <button onClick={() => setViewMode('table')}
+                  className={`text-xs px-2 py-0.5 transition cursor-pointer ${viewMode === 'table' ? 'bg-gray-700 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+                  표
+                </button>
+                <button onClick={() => setViewMode('chart')}
+                  className={`text-xs px-2 py-0.5 transition cursor-pointer border-l border-gray-200 ${viewMode === 'chart' ? 'bg-gray-700 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+                  차트
+                </button>
+              </div>
             </div>
             {wbs.status === 'DRAFT' && (
               <button onClick={confirm} disabled={confirming}
@@ -211,17 +272,33 @@ function WbsTab({ projectId }: { projectId: string }) {
           {wbs.projectSummary && (
             <p className="text-xs text-gray-600 bg-yellow-50 border border-yellow-100 rounded px-3 py-2 mb-3">{wbs.projectSummary}</p>
           )}
+          {viewMode === 'chart' ? (
+            <WbsGanttChart items={sortedItems} onItemClick={openItemModal} />
+          ) : (
           <div className="overflow-x-auto border border-gray-200 rounded">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  {['ID', '태스크명', '부서', '복잡도', '기간', '시작일', '종료일', '확인'].map(h => (
-                    <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">{h}</th>
+                  {WBS_COLUMNS.map(col => (
+                    <th key={col.label} className="px-3 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
+                      {col.key ? (
+                        <button onClick={() => handleSort(col.key!)}
+                          className="flex items-center gap-1 hover:text-gray-700 transition cursor-pointer">
+                          {col.label}
+                          {sortKey === col.key && (
+                            <span className="inline-flex flex-col leading-none text-[0.6rem]">
+                              <span className={sortAsc ? 'text-gray-700' : 'text-gray-300'}>▲</span>
+                              <span className={!sortAsc ? 'text-gray-700' : 'text-gray-300'}>▼</span>
+                            </span>
+                          )}
+                        </button>
+                      ) : col.label}
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {wbs.items.map(item => (
+                {sortedItems.map(item => (
                   <tr key={item.id} className={`hover:bg-gray-50 ${item.isDecisionPoint ? 'bg-orange-50/40' : ''}`}>
                     <td className="px-3 py-2 text-gray-400 font-mono text-xs whitespace-nowrap">{item.taskId ?? `T${String(item.order).padStart(2, '0')}`}</td>
                     <td className="px-3 py-2 max-w-xs">
@@ -253,6 +330,7 @@ function WbsTab({ projectId }: { projectId: string }) {
               </tbody>
             </table>
           </div>
+          )}
         </div>
       )}
 
@@ -332,6 +410,129 @@ function WbsTab({ projectId }: { projectId: string }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── WBS 간트 차트 ─────────────────────────────────────────────────────────────
+function WbsGanttChart({ items, onItemClick }: { items: WbsItem[]; onItemClick: (item: WbsItem) => void }) {
+  const DAY_MS = 86_400_000;
+  const PX_PER_DAY = 10;
+  const ROW_HEIGHT = 32;
+  const NAME_WIDTH = 220;
+
+  const validItems = items.filter(i => i.startDate && i.endDate);
+  const omitted = items.length - validItems.length;
+
+  if (validItems.length === 0) {
+    return (
+      <div className="border border-gray-200 rounded p-8 text-center text-sm text-gray-400">
+        일정이 있는 태스크가 없어 차트를 표시할 수 없습니다
+      </div>
+    );
+  }
+
+  const sorted = [...validItems].sort((a, b) => (a.startDate ?? '').localeCompare(b.startDate ?? ''));
+  const uniqueRoles = Array.from(new Set(sorted.map(i => i.assignedRole).filter((r): r is string => !!r)));
+  const roleColorMap = new Map<string, BarColor>();
+  uniqueRoles.forEach((role, i) => {
+    roleColorMap.set(role, ROLE_BAR_PALETTE[i % ROLE_BAR_PALETTE.length]);
+  });
+  const getRoleColor = (role?: string | null): BarColor =>
+    (role && roleColorMap.get(role)) || FALLBACK_BAR_COLOR;
+  const startTimes = sorted.map(i => new Date(i.startDate!).getTime());
+  const endTimes = sorted.map(i => new Date(i.endDate!).getTime());
+  const minTime = Math.min(...startTimes);
+  const maxTime = Math.max(...endTimes);
+  const totalDays = Math.max(1, Math.ceil((maxTime - minTime) / DAY_MS) + 1);
+  const chartWidth = totalDays * PX_PER_DAY;
+
+  const tickStart = new Date(minTime);
+  tickStart.setDate(1);
+  const monthTicks: { left: number; label: string }[] = [];
+  for (const cursor = new Date(tickStart); cursor.getTime() <= maxTime; cursor.setMonth(cursor.getMonth() + 1)) {
+    const offsetDays = (cursor.getTime() - minTime) / DAY_MS;
+    monthTicks.push({
+      left: Math.max(0, offsetDays * PX_PER_DAY),
+      label: `${cursor.getFullYear()}.${String(cursor.getMonth() + 1).padStart(2, '0')}`,
+    });
+  }
+
+  return (
+    <div className="border border-gray-200 rounded">
+      {(omitted > 0 || uniqueRoles.length > 0) && (
+        <div className="flex items-center justify-between gap-4 px-3 py-2 border-b border-gray-100 bg-gray-50">
+          <p className="text-xs text-gray-400">
+            {omitted > 0 ? `일정 미정 ${omitted}건은 차트에서 제외되었습니다` : ''}
+          </p>
+          {uniqueRoles.length > 0 && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 justify-end">
+              {uniqueRoles.map(role => {
+                const c = getRoleColor(role);
+                return (
+                  <div key={role} className="flex items-center gap-1.5 text-xs">
+                    <span className="inline-block w-3 h-3 rounded-sm border" style={{ backgroundColor: c.bg, borderColor: c.border }} />
+                    <span className="text-gray-600">{role}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+      <div className="overflow-x-auto">
+        <div style={{ width: NAME_WIDTH + chartWidth }}>
+          <div className="flex border-b border-gray-200 bg-gray-50" style={{ height: 28 }}>
+            <div style={{ width: NAME_WIDTH }} className="flex items-center px-3 text-xs font-medium text-gray-500 border-r border-gray-200">
+              태스크
+            </div>
+            <div className="relative" style={{ width: chartWidth }}>
+              {monthTicks.map((t, i) => (
+                <div key={i} className="absolute top-0 bottom-0 flex items-center pl-1 text-xs text-gray-500 border-l border-gray-200" style={{ left: t.left }}>
+                  {t.label}
+                </div>
+              ))}
+            </div>
+          </div>
+          {sorted.map(item => {
+            const startTime = new Date(item.startDate!).getTime();
+            const endTime = new Date(item.endDate!).getTime();
+            const left = ((startTime - minTime) / DAY_MS) * PX_PER_DAY;
+            const width = Math.max(PX_PER_DAY, ((endTime - startTime) / DAY_MS + 1) * PX_PER_DAY);
+            const barColor = getRoleColor(item.assignedRole);
+            return (
+              <div key={item.id} className="flex border-b border-gray-100 hover:bg-gray-50/60" style={{ height: ROW_HEIGHT }}>
+                <div style={{ width: NAME_WIDTH }} className="flex items-center px-3 text-xs border-r border-gray-200 overflow-hidden">
+                  <span className="text-gray-400 font-mono mr-2 shrink-0">{item.taskId ?? `T${String(item.order).padStart(2, '0')}`}</span>
+                  <span className="text-gray-700 truncate">{item.title}</span>
+                </div>
+                <div className="relative" style={{ width: chartWidth }}>
+                  {monthTicks.map((t, i) => (
+                    <div key={i} className="absolute top-0 bottom-0 border-l border-gray-100" style={{ left: t.left }} />
+                  ))}
+                  {item.isDecisionPoint ? (
+                    <button onClick={() => onItemClick(item)}
+                      className="absolute cursor-pointer hover:opacity-80 transition"
+                      style={{ left: left - 8, top: ROW_HEIGHT / 2 - 8, width: 16, height: 16 }}
+                      title={item.title}>
+                      <svg viewBox="0 0 16 16" className="w-full h-full">
+                        <polygon points="8,1 15,8 8,15 1,8" className="fill-orange-500" />
+                      </svg>
+                    </button>
+                  ) : (
+                    <button onClick={() => onItemClick(item)}
+                      className="absolute border rounded px-1.5 text-xs truncate hover:shadow transition cursor-pointer text-left"
+                      style={{ left, width, top: ROW_HEIGHT / 2 - 10, height: 20, lineHeight: '18px', backgroundColor: barColor.bg, color: barColor.text, borderColor: barColor.border }}
+                      title={item.title}>
+                      {item.title}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
