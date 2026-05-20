@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { projectsApi } from '../api/projects';
 import { meetingsApi } from '../api/meetings';
 import { actionItemsApi } from '../api/actionItems';
-import type { Project, Document, ProjectWbs, Meeting, ActionItem } from '../types';
+import type { Project, Document, ProjectWbs, WbsItem, Meeting, ActionItem } from '../types';
 
 type Tab = 'wbs' | 'meetings' | 'members' | 'actions';
 
@@ -45,12 +45,17 @@ function WbsTab({ projectId }: { projectId: string }) {
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [modalItem, setModalItem] = useState<WbsItem | null>(null);
+  const [itemForm, setItemForm] = useState({ title: '', assignedRole: '', durationDays: 0, startDate: '', endDate: '', isDecisionPoint: false });
+  const [savingItem, setSavingItem] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval>>();
 
   const loadDocs = () => projectsApi.listDocuments(projectId).then(setDocs);
   const loadWbs = () =>
-    projectsApi.getWbs(projectId).then(setWbs).catch(() => setWbsError(true));
+    projectsApi.getWbs(projectId)
+      .then(w => { setWbs(w); setWbsError(false); })
+      .catch(() => setWbsError(true));
 
   useEffect(() => {
     loadDocs(); loadWbs();
@@ -91,6 +96,13 @@ function WbsTab({ projectId }: { projectId: string }) {
     if (isPdf) uploadFile(file);
   };
 
+  const removeDoc = async (d: Document) => {
+    const processing = d.status === 'PENDING' || d.status === 'IN_PROGRESS';
+    if (!window.confirm(processing ? '분석을 취소하시겠습니까?' : '문서를 삭제하시겠습니까?')) return;
+    await projectsApi.deleteDocument(projectId, d.id);
+    await loadDocs();
+  };
+
   const confirm = async () => {
     setConfirming(true);
     try { setWbs(await projectsApi.confirmWbs(projectId)); }
@@ -100,6 +112,30 @@ function WbsTab({ projectId }: { projectId: string }) {
   const toggleDecision = async (itemId: string, current: boolean) => {
     const updated = await projectsApi.updateWbsItem(projectId, itemId, { isDecisionPoint: !current });
     setWbs(prev => prev ? { ...prev, items: prev.items.map(i => i.id === itemId ? updated : i) } : prev);
+  };
+
+  const openItemModal = (item: WbsItem) => {
+    setModalItem(item);
+    setItemForm({
+      title: item.title,
+      assignedRole: item.assignedRole ?? '',
+      durationDays: item.durationDays ?? 0,
+      startDate: (item.startDate ?? '').slice(0, 10),
+      endDate: (item.endDate ?? '').slice(0, 10),
+      isDecisionPoint: item.isDecisionPoint,
+    });
+  };
+
+  const saveItem = async () => {
+    if (!modalItem) return;
+    setSavingItem(true);
+    try {
+      const updated = await projectsApi.updateWbsItem(projectId, modalItem.id, itemForm);
+      setWbs(prev => prev ? { ...prev, items: prev.items.map(i => i.id === updated.id ? updated : i) } : prev);
+      setModalItem(null);
+    } finally {
+      setSavingItem(false);
+    }
   };
 
   const isProcessing = docs.some(d => d.status === 'PENDING' || d.status === 'IN_PROGRESS');
@@ -143,6 +179,14 @@ function WbsTab({ projectId }: { projectId: string }) {
               ) : d.status === 'COMPLETED' ? (
                 <span className="text-xs text-green-600">완료</span>
               ) : <span className="text-xs text-red-500">실패</span>}
+              <button onClick={() => removeDoc(d)}
+                className={`text-xs border px-2 py-0.5 rounded transition cursor-pointer ${
+                  d.status === 'PENDING' || d.status === 'IN_PROGRESS'
+                    ? 'border-gray-300 text-gray-500 hover:bg-gray-50'
+                    : 'border-red-200 text-red-400 hover:bg-red-50'
+                }`}>
+                {d.status === 'PENDING' || d.status === 'IN_PROGRESS' ? '취소' : '삭제'}
+              </button>
             </div>
           ))}
         </div>
@@ -171,30 +215,33 @@ function WbsTab({ projectId }: { projectId: string }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  {['ID', '태스크명', '부서', '복잡도', '기간', '시작일', '종료일', '의사결정'].map(h => (
-                    <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
+                  {['ID', '태스크명', '부서', '복잡도', '기간', '시작일', '종료일', '확인'].map(h => (
+                    <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {wbs.items.map(item => (
                   <tr key={item.id} className={`hover:bg-gray-50 ${item.isDecisionPoint ? 'bg-orange-50/40' : ''}`}>
-                    <td className="px-3 py-2 text-gray-400 font-mono text-xs">{item.taskId ?? `T${String(item.order).padStart(2, '0')}`}</td>
+                    <td className="px-3 py-2 text-gray-400 font-mono text-xs whitespace-nowrap">{item.taskId ?? `T${String(item.order).padStart(2, '0')}`}</td>
                     <td className="px-3 py-2 max-w-xs">
-                      <div className="text-sm font-medium text-gray-800 truncate">{item.title}</div>
+                      <button onClick={() => openItemModal(item)}
+                        className="block w-full text-left text-sm font-medium text-gray-800 truncate hover:text-orange-600 hover:underline transition cursor-pointer">
+                        {item.title}
+                      </button>
                       {item.reasoning && <div className="text-xs text-gray-400 truncate">{item.reasoning}</div>}
                     </td>
-                    <td className="px-3 py-2 text-xs text-gray-600">{item.assignedRole}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{item.assignedRole}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
                       {item.complexity && (
                         <span className={`text-xs px-1.5 py-0.5 border rounded ${COMPLEXITY_COLOR[item.complexity] ?? 'bg-gray-50 text-gray-500 border-gray-200'}`}>
                           {item.complexity}
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-xs text-gray-600">{item.durationDays}일</td>
-                    <td className="px-3 py-2 text-xs text-gray-400">{item.startDate ?? '-'}</td>
-                    <td className="px-3 py-2 text-xs text-gray-400">{item.endDate ?? '-'}</td>
+                    <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{item.durationDays}일</td>
+                    <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">{item.startDate ?? '-'}</td>
+                    <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">{item.endDate ?? '-'}</td>
                     <td className="px-3 py-2">
                       <button onClick={() => toggleDecision(item.id, item.isDecisionPoint)}
                         className={`w-4 h-4 border flex items-center justify-center transition cursor-pointer rounded-sm ${item.isDecisionPoint ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-300 hover:border-orange-400'}`}>
@@ -205,6 +252,83 @@ function WbsTab({ projectId }: { projectId: string }) {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {modalItem && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onClick={() => setModalItem(null)}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-5 space-y-3"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-800">태스크 상세</h3>
+              <span className="text-xs text-gray-400 font-mono">
+                {modalItem.taskId ?? `T${String(modalItem.order).padStart(2, '0')}`}
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">태스크명</label>
+              <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+                value={itemForm.title} onChange={e => setItemForm(f => ({ ...f, title: e.target.value }))} />
+            </div>
+
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-1">부서</label>
+                <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+                  value={itemForm.assignedRole} onChange={e => setItemForm(f => ({ ...f, assignedRole: e.target.value }))} />
+              </div>
+              <div className="w-24">
+                <label className="block text-xs text-gray-500 mb-1">기간(일)</label>
+                <input type="number" min={0} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+                  value={itemForm.durationDays} onChange={e => setItemForm(f => ({ ...f, durationDays: Number(e.target.value) }))} />
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-1">시작일</label>
+                <input type="date" className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+                  value={itemForm.startDate} onChange={e => setItemForm(f => ({ ...f, startDate: e.target.value }))} />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-1">종료일</label>
+                <input type="date" className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+                  value={itemForm.endDate} onChange={e => setItemForm(f => ({ ...f, endDate: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <input type="checkbox" className="accent-orange-500 cursor-pointer"
+                  checked={itemForm.isDecisionPoint}
+                  onChange={e => setItemForm(f => ({ ...f, isDecisionPoint: e.target.checked }))} />
+                확인
+              </label>
+              {modalItem.complexity && (
+                <span className="text-xs text-gray-500">
+                  복잡도 <span className={`px-1.5 py-0.5 border rounded ${COMPLEXITY_COLOR[modalItem.complexity] ?? 'bg-gray-50 text-gray-500 border-gray-200'}`}>{modalItem.complexity}</span>
+                </span>
+              )}
+            </div>
+
+            {modalItem.reasoning && (
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">근거</label>
+                <p className="text-xs text-gray-600 bg-gray-50 border border-gray-100 rounded px-3 py-2">{modalItem.reasoning}</p>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setModalItem(null)}
+                className="flex-1 border border-gray-300 rounded py-2 text-sm text-gray-600 hover:bg-gray-50 transition cursor-pointer">취소</button>
+              <button onClick={saveItem} disabled={savingItem}
+                className="flex-1 bg-orange-500 text-white rounded py-2 text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer">
+                {savingItem ? '저장 중...' : '저장'}
+              </button>
+            </div>
           </div>
         </div>
       )}
