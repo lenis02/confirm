@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { ProjectMember } from '../projects/entities/project-member.entity';
 import { Meeting } from '../meetings/entities/meeting.entity';
 import { ActionItem } from '../action-items/entities/action-item.entity';
@@ -78,6 +78,55 @@ export class DashboardService {
     }));
 
     return { week: { start, end }, projects };
+  }
+
+  async getMonthlyOverview(userId: string, year: number, month: number) {
+    // month: 0-indexed (JS convention)
+    const start = new Date(year, month, 1, 0, 0, 0, 0);
+    const end   = new Date(year, month + 1, 0, 23, 59, 59, 999);
+
+    const memberships = await this.memberRepo.find({
+      where: { userId },
+      relations: ['project'],
+    });
+
+    const projectIds = memberships.map((m) => m.projectId);
+
+    if (projectIds.length === 0) return { projects: [] };
+
+    const meetings = await this.meetingRepo
+      .createQueryBuilder('meeting')
+      .where('meeting.project_id IN (:...projectIds)', { projectIds })
+      .andWhere('meeting.scheduled_at >= :start', { start })
+      .andWhere('meeting.scheduled_at <= :end', { end })
+      .orderBy('meeting.scheduled_at', 'ASC')
+      .getMany();
+
+    const meetingsByProject = this.groupBy(meetings, (m) => m.projectId);
+
+    const toDateStr = (d: Date | string | null): string | null => {
+      if (!d) return null;
+      const dt = d instanceof Date ? d : new Date(d);
+      return dt.toISOString().split('T')[0];
+    };
+
+    return {
+      projects: memberships.map(({ project, role }) => ({
+        id: project.id,
+        name: project.name,
+        status: project.status,
+        myRole: role,
+        startDate: toDateStr(project.startDate),
+        endDate:   toDateStr(project.endDate),
+        meetings: (meetingsByProject[project.id] ?? []).map((m) => ({
+          id: m.id,
+          title: m.title,
+          type: m.type,
+          status: m.status,
+          scheduledAt: m.scheduledAt,
+        })),
+      })),
+    };
   }
 
   private resolveWeekRange(week?: string): { start: Date; end: Date } {

@@ -13,4 +13,16 @@ export class DashboardController {
   getCalendar(@CurrentUser() user: User, @Query('week') week?: string) {
     return this.dashboardService.getCalendar(user.id, week);
   }
+
+  @Get('overview')
+  getMonthlyOverview(
+    @CurrentUser() user: User,
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+  ) {
+    const now = new Date();
+    const y = year  ? parseInt(year,  10) : now.getFullYear();
+    const m = month ? parseInt(month, 10) : now.getMonth(); // 0-indexed
+    return this.dashboardService.getMonthlyOverview(user.id, y, m);
+  }
 }
