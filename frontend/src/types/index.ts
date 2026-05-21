@@ -96,3 +96,75 @@ export interface CalendarWeek {
     actionItems: Pick<ActionItem, 'id' | 'title' | 'status' | 'dueDate' | 'isCarriedOver'>[];
   }[];
 }
+
+export interface ChecklistItem {
+  id: string;
+  content: string;
+  isDone: boolean;
+  order: number;
+  isAiGenerated?: boolean;
+  validationReason?: string;
+}
+
+export interface MeetingBriefing {
+  previousMeetingId?: string;
+  previousMeetingTitle?: string;
+  previousMeetingDate?: string;
+  carriedOverItems: Array<{
+    id: string;
+    title: string;
+    status: 'PENDING' | 'COMPLETED';
+    assignee?: { name: string };
+    dueDate?: string;
+  }>;
+  contextSummary?: string;
+}
+
+export interface MeetingMetrics {
+  meetingId: string;
+  achievementRate: number;
+  summaryReport?: string;
+  totalChecklists: number;
+  completedChecklists: number;
+  carriedOverCount: number;
+}
+
+export interface UserIntegration {
+  id: string;
+  userId: string;
+  serviceType: 'NAVER_WORKS' | 'NOTION';
+  status: 'ACTIVE' | 'EXPIRED';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DashboardProjectMeeting {
+  id: string;
+  title: string;
+  type: string;
+  status: string;
+  scheduledAt: string;
+}
+
+export interface DashboardProject {
+  id: string;
+  name: string;
+  status: string;
+  myRole: string;
+  startDate: string | null;
+  endDate: string | null;
+  meetings: DashboardProjectMeeting[];
+}
+
+export interface DashboardOverview {
+  projects: DashboardProject[];
+}
+
+export interface MeetingRecommendation {
+  milestoneId: string;
+  milestoneTitle: string;
+  suggestedDate?: string;
+  meetingType: 'KICKOFF' | 'PROGRESS_CHECK' | 'ISSUE_CHECK' | 'CONSENSUS';
+  reason: string;
+  participants: string[];
+}

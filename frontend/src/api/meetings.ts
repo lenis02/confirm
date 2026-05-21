@@ -1,5 +1,5 @@
 import client from './client';
-import type { Meeting } from '../types';
+import type { Meeting, ChecklistItem, MeetingBriefing, MeetingMetrics } from '../types';
 
 export const meetingsApi = {
   list: (projectId: string, status?: string) =>
@@ -18,11 +18,28 @@ export const meetingsApi = {
     client.delete(`/meetings/${meetingId}`),
 
   getChecklists: (meetingId: string) =>
-    client.get(`/meetings/${meetingId}/checklists`).then(r => r.data),
+    client.get<ChecklistItem[]>(`/meetings/${meetingId}/checklists`).then(r => r.data),
+
+  updateChecklists: (meetingId: string, items: Array<{ id?: string; content: string; isDone?: boolean; order?: number }>) =>
+    client.patch<ChecklistItem[]>(`/meetings/${meetingId}/checklists`, { items }).then(r => r.data),
+
+  getBriefing: (meetingId: string) =>
+    client.get<MeetingBriefing>(`/meetings/${meetingId}/briefing`).then(r => r.data),
+
+  uploadStt: (meetingId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return client.post(`/meetings/${meetingId}/stt`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data);
+  },
+
+  getTranscript: (meetingId: string) =>
+    client.get<{ transcriptText: string; sttStatus: string }>(`/meetings/${meetingId}/transcript`).then(r => r.data),
 
   complete: (meetingId: string) =>
     client.post<Meeting>(`/meetings/${meetingId}/completion`).then(r => r.data),
 
   getMetrics: (meetingId: string) =>
-    client.get(`/meetings/${meetingId}/metrics`).then(r => r.data),
+    client.get<MeetingMetrics>(`/meetings/${meetingId}/metrics`).then(r => r.data),
 };
