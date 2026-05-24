@@ -62,6 +62,23 @@ export interface ProjectWbs {
   items: WbsItem[];
 }
 
+export interface MeetingChecklist {
+  id: string;
+  content: string;
+  isDone: boolean;
+  order: number;
+}
+
+// ChecklistItem extends MeetingChecklist with AI fields (used by HEAD's MeetingDetailPage)
+export interface ChecklistItem {
+  id: string;
+  content: string;
+  isDone: boolean;
+  order: number;
+  isAiGenerated?: boolean;
+  validationReason?: string;
+}
+
 export interface Meeting {
   id: string;
   projectId: string;
@@ -71,7 +88,31 @@ export interface Meeting {
   scheduledAt: string;
   completedAt?: string;
   achievementRate?: number;
-  checklists?: { id: string; content: string; isDone: boolean; order: number }[];
+  summary?: string;
+  checklists?: MeetingChecklist[];
+}
+
+export interface MeetingMetrics {
+  meetingId: string;
+  achievementRate: number;
+  summaryReport?: string;
+  totalChecklists: number;
+  completedChecklists: number;
+  carriedOverCount: number;
+}
+
+export interface MeetingBriefing {
+  previousMeetingId?: string;
+  previousMeetingTitle?: string;
+  previousMeetingDate?: string;
+  carriedOverItems: Array<{
+    id: string;
+    title: string;
+    status: 'PENDING' | 'COMPLETED';
+    assignee?: { name: string };
+    dueDate?: string;
+  }>;
+  contextSummary?: string;
 }
 
 export interface ActionItem {
@@ -95,38 +136,6 @@ export interface CalendarWeek {
     meetings: Pick<Meeting, 'id' | 'title' | 'type' | 'status' | 'scheduledAt'>[];
     actionItems: Pick<ActionItem, 'id' | 'title' | 'status' | 'dueDate' | 'isCarriedOver'>[];
   }[];
-}
-
-export interface ChecklistItem {
-  id: string;
-  content: string;
-  isDone: boolean;
-  order: number;
-  isAiGenerated?: boolean;
-  validationReason?: string;
-}
-
-export interface MeetingBriefing {
-  previousMeetingId?: string;
-  previousMeetingTitle?: string;
-  previousMeetingDate?: string;
-  carriedOverItems: Array<{
-    id: string;
-    title: string;
-    status: 'PENDING' | 'COMPLETED';
-    assignee?: { name: string };
-    dueDate?: string;
-  }>;
-  contextSummary?: string;
-}
-
-export interface MeetingMetrics {
-  meetingId: string;
-  achievementRate: number;
-  summaryReport?: string;
-  totalChecklists: number;
-  completedChecklists: number;
-  carriedOverCount: number;
 }
 
 export interface UserIntegration {

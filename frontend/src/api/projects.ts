@@ -11,7 +11,7 @@ export const projectsApi = {
   get: (id: string) =>
     client.get<Project>(`/projects/${id}`).then(r => r.data),
 
-  update: (id: string, data: Partial<{ name: string; description: string; status: string }>) =>
+  update: (id: string, data: Partial<{ name: string; description: string; startDate: string; endDate: string; status: string }>) =>
     client.patch<Project>(`/projects/${id}`, data).then(r => r.data),
 
   delete: (id: string) =>
@@ -42,6 +42,9 @@ export const projectsApi = {
 
   getDocument: (projectId: string, documentId: string) =>
     client.get<Document>(`/projects/${projectId}/documents/${documentId}`).then(r => r.data),
+
+  deleteDocument: (projectId: string, documentId: string) =>
+    client.delete(`/projects/${projectId}/documents/${documentId}`),
 
   // wbs
   getWbs: (projectId: string) =>

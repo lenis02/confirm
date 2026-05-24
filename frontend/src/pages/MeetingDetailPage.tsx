@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { meetingsApi } from '../api/meetings';
 import type { ChecklistItem, Meeting, MeetingBriefing, MeetingMetrics } from '../types';
 
+type Tab = 'overview' | 'checklist' | 'stt' | 'metrics';
+
 const MEETING_TYPE_LABEL: Record<string, string> = {
   KICKOFF: '킥오프',
   PROGRESS_CHECK: '진도점검',
@@ -67,8 +69,71 @@ function BriefingSection({ briefing }: { briefing: MeetingBriefing }) {
   );
 }
 
-// ── 체크리스트 섹션 ────────────────────────────────────────────────────────────
-function ChecklistSection({
+// ── 개요 탭 ───────────────────────────────────────────────────────────────────
+function OverviewTab({
+  meeting,
+  briefing,
+  onComplete,
+  completing,
+}: {
+  meeting: Meeting;
+  briefing: MeetingBriefing | null;
+  onComplete: () => void;
+  completing: boolean;
+}) {
+  const typeCls = MEETING_TYPE_COLOR[meeting.type] ?? 'bg-gray-50 text-gray-600 border-gray-200';
+  const st = STATUS_MAP[meeting.status];
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-white border border-gray-200 rounded p-4 space-y-2">
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">기본 정보</h3>
+        <div className="grid grid-cols-2 gap-y-2 text-sm">
+          <span className="text-gray-400">일시</span>
+          <span className="text-gray-800">
+            {new Date(meeting.scheduledAt).toLocaleString('ko-KR', {
+              year: 'numeric', month: 'long', day: 'numeric',
+              hour: '2-digit', minute: '2-digit',
+            })}
+          </span>
+          <span className="text-gray-400">유형</span>
+          <span className={`inline-flex w-fit text-xs px-1.5 py-0.5 border rounded ${typeCls}`}>
+            {MEETING_TYPE_LABEL[meeting.type]}
+          </span>
+          <span className="text-gray-400">상태</span>
+          <span className={`inline-flex w-fit text-xs px-1.5 py-0.5 border rounded ${st.cls}`}>
+            {st.label}
+          </span>
+          {meeting.achievementRate !== undefined && (
+            <>
+              <span className="text-gray-400">체크리스트 달성률</span>
+              <span className="text-gray-800 font-medium">{meeting.achievementRate}%</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {briefing && (briefing.carriedOverItems.length > 0 || briefing.previousMeetingId) && (
+        <BriefingSection briefing={briefing} />
+      )}
+
+      {meeting.status !== 'COMPLETED' && (
+        <div className="flex justify-end">
+          <button
+            onClick={onComplete}
+            disabled={completing}
+            className="bg-orange-500 text-white px-4 py-2 rounded text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer"
+          >
+            {completing ? '처리 중...' : '회의 완료 처리'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 체크리스트 탭 ─────────────────────────────────────────────────────────────
+function ChecklistTab({
   meetingId,
   items,
   onChange,
@@ -92,6 +157,14 @@ function ChecklistSection({
     await meetingsApi.updateChecklists(meetingId,
       updated.map((i, idx) => ({ id: i.id, content: i.content, isDone: i.isDone, order: idx }))
     ).catch(() => onChange(items));
+  };
+
+  const removeItem = (index: number) => {
+    const updated = items.filter((_, i) => i !== index).map((item, i) => ({ ...item, order: i }));
+    onChange(updated);
+    meetingsApi.updateChecklists(meetingId,
+      updated.map((i, idx) => ({ id: i.id, content: i.content, isDone: i.isDone, order: idx }))
+    ).catch(() => {});
   };
 
   const addItem = async (e: React.FormEvent) => {
@@ -118,6 +191,7 @@ function ChecklistSection({
         {items.length > 0 && (
           <span className="text-xs text-gray-500">{done}/{items.length} 완료</span>
         )}
+        {saving && <span className="text-xs text-gray-400 ml-2">저장 중...</span>}
       </div>
 
       {/* 진행률 바 */}
@@ -135,8 +209,8 @@ function ChecklistSection({
         <p className="text-xs text-gray-400 text-center py-4">체크리스트 항목이 없습니다</p>
       ) : (
         <ul className="space-y-1.5">
-          {items.map(item => (
-            <li key={item.id} className="flex items-start gap-2.5">
+          {items.map((item, idx) => (
+            <li key={item.id || idx} className="flex items-start gap-2.5">
               <button
                 onClick={() => toggle(item)}
                 disabled={readonly}
@@ -155,6 +229,12 @@ function ChecklistSection({
               </span>
               {item.validationReason && (
                 <span className="text-xs text-green-600 shrink-0" title={item.validationReason}>AI</span>
+              )}
+              {!readonly && (
+                <button
+                  onClick={() => removeItem(idx)}
+                  className="text-gray-300 hover:text-red-400 transition cursor-pointer text-base leading-none shrink-0"
+                >×</button>
               )}
             </li>
           ))}
@@ -183,8 +263,8 @@ function ChecklistSection({
   );
 }
 
-// ── STT 섹션 ──────────────────────────────────────────────────────────────────
-function SttSection({ meetingId }: { meetingId: string }) {
+// ── STT 탭 ───────────────────────────────────────────────────────────────────
+function SttTab({ meetingId }: { meetingId: string }) {
   const [transcript, setTranscript] = useState<string | null>(null);
   const [sttStatus, setSttStatus] = useState<'idle' | 'uploading' | 'processing' | 'done' | 'error'>('idle');
   const [expanded, setExpanded] = useState(false);
@@ -287,8 +367,8 @@ function SttSection({ meetingId }: { meetingId: string }) {
   );
 }
 
-// ── 리포트 섹션 ───────────────────────────────────────────────────────────────
-function MetricsSection({ metrics }: { metrics: MeetingMetrics }) {
+// ── 회의록 탭 ─────────────────────────────────────────────────────────────────
+function MetricsTab({ metrics }: { metrics: MeetingMetrics }) {
   return (
     <section className="bg-green-50 border border-green-200 rounded p-4 space-y-3">
       <h3 className="text-sm font-semibold text-green-800 flex items-center gap-1.5">
@@ -342,6 +422,14 @@ function MetricsSection({ metrics }: { metrics: MeetingMetrics }) {
   );
 }
 
+// ── 탭 정의 ──────────────────────────────────────────────────────────────────
+const TABS: { key: Tab; label: string; onlyCompleted?: boolean }[] = [
+  { key: 'overview', label: '개요' },
+  { key: 'checklist', label: '체크리스트' },
+  { key: 'stt', label: 'STT' },
+  { key: 'metrics', label: '회의록', onlyCompleted: true },
+];
+
 // ── 메인 페이지 ───────────────────────────────────────────────────────────────
 export default function MeetingDetailPage() {
   const { meetingId } = useParams<{ meetingId: string }>();
@@ -353,6 +441,11 @@ export default function MeetingDetailPage() {
   const [metrics, setMetrics] = useState<MeetingMetrics | null>(null);
   const [completing, setCompleting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Tab>('overview');
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({ title: '', scheduledAt: '' });
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!meetingId) return;
@@ -386,6 +479,36 @@ export default function MeetingDetailPage() {
     }
   };
 
+  const openEdit = () => {
+    if (!meeting) return;
+    setEditForm({
+      title: meeting.title,
+      scheduledAt: meeting.scheduledAt.slice(0, 16),
+    });
+    setEditMode(true);
+  };
+
+  const saveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!meetingId) return;
+    setSaving(true);
+    try {
+      const updated = await meetingsApi.update(meetingId, editForm);
+      setMeeting(updated);
+      setEditMode(false);
+    } finally { setSaving(false); }
+  };
+
+  const deleteMeeting = async () => {
+    if (!meetingId || !meeting) return;
+    if (!confirm('회의를 삭제하시겠습니까?')) return;
+    setDeleting(true);
+    try {
+      await meetingsApi.delete(meetingId);
+      navigate(`/projects/${meeting.projectId}`, { replace: true });
+    } finally { setDeleting(false); }
+  };
+
   if (loading || !meeting) {
     return (
       <div className="flex justify-center py-20">
@@ -397,6 +520,7 @@ export default function MeetingDetailPage() {
   const typeCls = MEETING_TYPE_COLOR[meeting.type] ?? 'bg-gray-50 text-gray-600 border-gray-200';
   const st = STATUS_MAP[meeting.status];
   const isCompleted = meeting.status === 'COMPLETED';
+  const availableTabs = TABS.filter(t => !t.onlyCompleted || isCompleted);
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-5">
@@ -429,8 +553,21 @@ export default function MeetingDetailPage() {
             </p>
           </div>
 
-          {/* 회의 종료 버튼 */}
-          {!isCompleted && (
+          {meeting.status === 'SCHEDULED' && (
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={openEdit}
+                className="border border-gray-300 text-gray-600 px-3 py-1.5 rounded text-sm hover:bg-gray-50 transition cursor-pointer"
+              >수정</button>
+              <button
+                onClick={deleteMeeting}
+                disabled={deleting}
+                className="border border-red-300 text-red-500 px-3 py-1.5 rounded text-sm hover:bg-red-50 transition disabled:opacity-50 cursor-pointer"
+              >삭제</button>
+            </div>
+          )}
+
+          {!isCompleted && meeting.status === 'IN_PROGRESS' && (
             <button
               onClick={complete}
               disabled={completing}
@@ -442,24 +579,78 @@ export default function MeetingDetailPage() {
         </div>
       </div>
 
-      {/* 이전 회의 브리핑 */}
-      {briefing && (briefing.carriedOverItems.length > 0 || briefing.previousMeetingId) && (
-        <BriefingSection briefing={briefing} />
+      {/* 수정 폼 */}
+      {editMode && (
+        <form onSubmit={saveEdit} className="bg-gray-50 border border-gray-200 rounded p-4 space-y-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">제목</label>
+            <input
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+              value={editForm.title}
+              onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">일시</label>
+            <input
+              type="datetime-local"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+              value={editForm.scheduledAt}
+              onChange={e => setEditForm(f => ({ ...f, scheduledAt: e.target.value }))}
+              required
+            />
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setEditMode(false)}
+              className="flex-1 border border-gray-300 rounded py-2 text-sm text-gray-600 hover:bg-white transition cursor-pointer">취소</button>
+            <button type="submit" disabled={saving}
+              className="flex-1 bg-orange-500 text-white rounded py-2 text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer">
+              {saving ? '저장 중...' : '저장'}
+            </button>
+          </div>
+        </form>
       )}
 
-      {/* 체크리스트 */}
-      <ChecklistSection
-        meetingId={meeting.id}
-        items={checklists}
-        onChange={setChecklists}
-        readonly={isCompleted}
-      />
+      {/* 탭 */}
+      <div className="flex border-b border-gray-200">
+        {availableTabs.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition cursor-pointer ${
+              tab === t.key
+                ? 'border-orange-500 text-orange-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >{t.label}</button>
+        ))}
+      </div>
 
-      {/* STT */}
-      {!isCompleted && <SttSection meetingId={meeting.id} />}
+      {tab === 'overview' && (
+        <OverviewTab
+          meeting={meeting}
+          briefing={briefing}
+          onComplete={complete}
+          completing={completing}
+        />
+      )}
 
-      {/* 완료 리포트 */}
-      {isCompleted && metrics && <MetricsSection metrics={metrics} />}
+      {tab === 'checklist' && (
+        <ChecklistTab
+          meetingId={meeting.id}
+          items={checklists}
+          onChange={setChecklists}
+          readonly={isCompleted}
+        />
+      )}
+
+      {tab === 'stt' && <SttTab meetingId={meeting.id} />}
+
+      {tab === 'metrics' && isCompleted && metrics && <MetricsTab metrics={metrics} />}
+      {tab === 'metrics' && isCompleted && !metrics && (
+        <p className="text-sm text-gray-400 text-center py-10">회의록 데이터가 없습니다</p>
+      )}
     </div>
   );
 }
