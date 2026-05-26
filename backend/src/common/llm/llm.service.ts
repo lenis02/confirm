@@ -50,7 +50,7 @@ export class LlmService {
     const apiKey = this.config.get<string>('GEMINI_API_KEY');
     if (!apiKey) throw new Error('GEMINI_API_KEY 환경변수가 설정되지 않았습니다.');
     this.genAI = new GoogleGenerativeAI(apiKey);
-    this.modelName = this.config.get('GEMINI_MODEL', 'gemini-1.5-flash');
+    this.modelName = this.config.get('GEMINI_MODEL', 'gemini-2.5-flash');
 
     // --- Claude 초기화 (추후 전환 시 주석 해제) ---
     // const apiKey = this.config.get<string>('ANTHROPIC_API_KEY');
@@ -88,7 +88,7 @@ export class LlmService {
 
       return parsed;
     } catch (err) {
-      this.logger.error('Gemini WBS 생성 실패', err);
+      this.logger.error(`Gemini WBS 생성 실패 (model=${this.modelName})`, err);
       throw new InternalServerErrorException('WBS 생성 중 오류가 발생했습니다.');
     }
   }

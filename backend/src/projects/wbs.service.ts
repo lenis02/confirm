@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
 import { ProjectsService } from './projects.service';
 import { MemberRole } from './entities/project-member.entity';
 import { ProjectWbs, WbsStatus } from './entities/project-wbs.entity';
@@ -13,13 +14,13 @@ import { WbsItem } from './entities/wbs-item.entity';
 import { LlmService } from '../common/llm/llm.service';
 
 export class UpdateWbsItemDto {
-  title?: string;
-  description?: string;
-  assignedRole?: string;
-  durationDays?: number;
-  startDate?: string;
-  endDate?: string;
-  isDecisionPoint?: boolean;
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsString() assignedRole?: string;
+  @IsOptional() @IsNumber() durationDays?: number;
+  @IsOptional() @IsString() startDate?: string;
+  @IsOptional() @IsString() endDate?: string;
+  @IsOptional() @IsBoolean() isDecisionPoint?: boolean;
 }
 
 @Injectable()
