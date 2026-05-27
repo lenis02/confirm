@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -12,6 +13,17 @@ import { MemberRole } from './entities/project-member.entity';
 import { ProjectWbs, WbsStatus } from './entities/project-wbs.entity';
 import { WbsItem } from './entities/wbs-item.entity';
 import { LlmService } from '../common/llm/llm.service';
+import { Meeting, MeetingType } from '../meetings/entities/meeting.entity';
+import { MeetingChecklist } from '../meetings/entities/meeting-checklist.entity';
+
+// 킥오프 회의 기본 체크리스트 (meetings.service의 KICKOFF 템플릿과 동일)
+const KICKOFF_CHECKLIST = [
+  '프로젝트 목표 및 범위 공유',
+  '팀원 역할 및 책임 명확화',
+  '일정 및 마일스톤 확인',
+  '커뮤니케이션 채널 결정',
+  'WBS 검토 및 승인',
+];
 
 export class UpdateWbsItemDto {
   @IsOptional() @IsString() title?: string;
@@ -25,11 +37,17 @@ export class UpdateWbsItemDto {
 
 @Injectable()
 export class WbsService {
+  private readonly logger = new Logger(WbsService.name);
+
   constructor(
     @InjectRepository(ProjectWbs)
     private readonly wbsRepo: Repository<ProjectWbs>,
     @InjectRepository(WbsItem)
     private readonly itemRepo: Repository<WbsItem>,
+    @InjectRepository(Meeting)
+    private readonly meetingRepo: Repository<Meeting>,
+    @InjectRepository(MeetingChecklist)
+    private readonly checklistRepo: Repository<MeetingChecklist>,
     private readonly projectsService: ProjectsService,
     private readonly llmService: LlmService,
   ) {}
@@ -38,6 +56,7 @@ export class WbsService {
     projectId: string,
     documentId: string,
     documentText: string,
+    createdById: string,
   ): Promise<ProjectWbs> {
     const result = await this.llmService.generateWbs(documentText);
 
@@ -75,7 +94,47 @@ export class WbsService {
     });
     await this.itemRepo.save(items);
 
+    // WBS 생성 직후 킥오프 회의 자동 생성 (실패해도 WBS 결과는 반환)
+    try {
+      await this.createKickoffMeeting(projectId, items, createdById);
+    } catch (err) {
+      this.logger.warn('킥오프 회의 자동 생성 실패', err as Error);
+    }
+
     return this.findWbs(projectId);
+  }
+
+  private async createKickoffMeeting(
+    projectId: string,
+    items: WbsItem[],
+    createdById: string,
+  ): Promise<void> {
+    // 이미 킥오프가 있으면 (문서 재업로드 등) 중복 생성 방지
+    const exists = await this.meetingRepo.findOne({
+      where: { projectId, type: MeetingType.KICKOFF },
+    });
+    if (exists) return;
+
+    // 가장 이른 태스크 시작일을 킥오프 일정으로, 없으면 오늘
+    const startTimes = items
+      .map((i) => i.startDate)
+      .filter((d): d is Date => !!d)
+      .map((d) => new Date(d).getTime());
+    const scheduledAt = startTimes.length ? new Date(Math.min(...startTimes)) : new Date();
+
+    const meeting = this.meetingRepo.create({
+      projectId,
+      createdById,
+      title: '킥오프 회의',
+      type: MeetingType.KICKOFF,
+      scheduledAt,
+    });
+    const saved = await this.meetingRepo.save(meeting);
+
+    const checklists = KICKOFF_CHECKLIST.map((content, order) =>
+      this.checklistRepo.create({ meetingId: saved.id, content, order }),
+    );
+    await this.checklistRepo.save(checklists);
   }
 
   async findWbs(projectId: string, userId?: string): Promise<ProjectWbs> {
