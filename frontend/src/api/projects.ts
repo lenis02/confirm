@@ -56,6 +56,12 @@ export const projectsApi = {
   updateWbsItem: (projectId: string, milestoneId: string, data: Partial<WbsItem>) =>
     client.patch<WbsItem>(`/projects/${projectId}/wbs/${milestoneId}`, data).then(r => r.data),
 
+  deleteWbsItem: (projectId: string, itemId: string) =>
+    client.delete(`/projects/${projectId}/wbs/${itemId}`),
+
+  deleteWbs: (projectId: string) =>
+    client.delete(`/projects/${projectId}/wbs`),
+
   getMeetingRecommendations: (projectId: string) =>
     client.get(`/projects/${projectId}/meeting-recommendations`).then(r => r.data),
 };

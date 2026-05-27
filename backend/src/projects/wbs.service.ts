@@ -189,6 +189,41 @@ export class WbsService {
     return this.itemRepo.save(item);
   }
 
+  async deleteItem(userId: string, projectId: string, itemId: string): Promise<void> {
+    await this.assertPm(userId, projectId);
+
+    const item = await this.itemRepo.findOne({ where: { id: itemId, projectId } });
+    if (!item) throw new NotFoundException('WBS 항목을 찾을 수 없습니다.');
+
+    await this.itemRepo.remove(item);
+    await this.resequenceItems(projectId);
+  }
+
+  // 삭제 후 남은 항목의 순번(order)·표시 ID(taskId)를 1부터 연속되게 재부여 (빈 ID 방지)
+  private async resequenceItems(projectId: string): Promise<void> {
+    const items = await this.itemRepo.find({
+      where: { projectId },
+      order: { order: 'ASC' },
+    });
+
+    items.forEach((it, idx) => {
+      it.order = idx + 1;
+      it.taskId = `T${String(idx + 1).padStart(2, '0')}`;
+    });
+
+    if (items.length > 0) await this.itemRepo.save(items);
+  }
+
+  async deleteWbs(userId: string, projectId: string): Promise<void> {
+    await this.assertPm(userId, projectId);
+
+    const wbs = await this.wbsRepo.findOne({ where: { projectId } });
+    if (!wbs) throw new NotFoundException('WBS가 존재하지 않습니다.');
+
+    // wbs_items는 FK onDelete CASCADE로 함께 삭제됨
+    await this.wbsRepo.remove(wbs);
+  }
+
   async getMeetingRecommendations(userId: string, projectId: string): Promise<object> {
     await this.projectsService.findOne(userId, projectId);
 
