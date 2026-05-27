@@ -83,8 +83,9 @@ export class LlmService {
         systemInstruction: MEETING_RECOMMENDER_SYSTEM_PROMPT,
       });
 
-      const result = await model.generateContent(
-        `<wbs_data>\n${wbsContext}\n</wbs_data>`,
+      const result = await this.callWithRetry(
+        () => model.generateContent(`<wbs_data>\n${wbsContext}\n</wbs_data>`),
+        'Gemini 회의 추천',
       );
 
       const text = result.response.text().trim();
@@ -101,6 +102,26 @@ export class LlmService {
     }
   }
 
+  // 일시적 오류(503 과부하 / 429 rate limit / 500)에 대해 지수 백오프 재시도
+  private async callWithRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
+    const maxRetries = 2; // 최초 1회 + 재시도 2회 = 총 3회 (대기 1s, 2s)
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        const status = (err as { status?: number })?.status;
+        const transient = status === 503 || status === 429 || status === 500;
+        if (!transient || attempt >= maxRetries) throw err;
+
+        const delayMs = 1000 * 2 ** attempt;
+        this.logger.warn(
+          `${label} 일시적 오류 (status=${status}) — ${delayMs}ms 후 재시도 (${attempt + 1}/${maxRetries})`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+
   private async generateWithGemini(documentText: string): Promise<WbsGenerationResult> {
     try {
       const model = this.genAI.getGenerativeModel({
@@ -108,8 +129,9 @@ export class LlmService {
         systemInstruction: WBS_GENERATOR_SYSTEM_PROMPT,
       });
 
-      const result = await model.generateContent(
-        `<input_data>\n${documentText}\n</input_data>`,
+      const result = await this.callWithRetry(
+        () => model.generateContent(`<input_data>\n${documentText}\n</input_data>`),
+        'Gemini WBS 생성',
       );
 
       const text = result.response.text().trim();
