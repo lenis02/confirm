@@ -191,7 +191,7 @@ export class MeetingsService {
             unfinishedChecklists: previousMeeting.checklists.filter((c) => !c.isDone),
           }
         : null,
-      carriedOverActionItems: await this.actionItemsService.findCarriedOver(meeting.projectId),
+      carriedOverItems: await this.actionItemsService.findCarriedOver(meeting.projectId),
     };
   }
 
