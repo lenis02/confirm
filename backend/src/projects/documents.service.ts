@@ -93,7 +93,12 @@ export class DocumentsService {
       const stillExists = await this.documentRepo.findOne({ where: { id: documentId } });
       if (!stillExists) return;
 
-      await this.wbsService.generateFromDocument(document.projectId, documentId, text);
+      await this.wbsService.generateFromDocument(
+        document.projectId,
+        documentId,
+        text,
+        document.uploadedById,
+      );
       await this.documentRepo.update(documentId, { status: DocumentStatus.COMPLETED });
     } catch (err) {
       this.logger.error(`문서 처리 실패: ${documentId}`, err);

@@ -77,6 +77,20 @@ export class MeetingsService {
     return this.findOne(userId, saved.id);
   }
 
+  async createFromRecommendations(
+    userId: string,
+    projectId: string,
+    dtos: CreateMeetingDto[],
+  ): Promise<Meeting[]> {
+    await this.projectsService.findOne(userId, projectId);
+
+    const created: Meeting[] = [];
+    for (const dto of dtos) {
+      created.push(await this.createMeeting(userId, projectId, dto));
+    }
+    return created;
+  }
+
   async findProjectMeetings(
     userId: string,
     projectId: string,
@@ -177,7 +191,7 @@ export class MeetingsService {
             unfinishedChecklists: previousMeeting.checklists.filter((c) => !c.isDone),
           }
         : null,
-      carriedOverActionItems: await this.actionItemsService.findCarriedOver(meeting.projectId),
+      carriedOverItems: await this.actionItemsService.findCarriedOver(meeting.projectId),
     };
   }
 
@@ -221,7 +235,17 @@ export class MeetingsService {
     meeting.achievementRate = total > 0 ? Math.round((done / total) * 100) : 0;
 
     const saved = await this.meetingRepo.save(meeting);
+
+    // 이전 미결 항목 이월 → 이번 회의의 미완료 체크리스트를 새 Action Item으로 생성
     await this.actionItemsService.markCarriedOver(meeting.projectId);
+    const uncheckedTitles = checklists.filter((c) => !c.isDone).map((c) => c.content);
+    await this.actionItemsService.createFromChecklists(
+      meeting.projectId,
+      meeting.id,
+      userId,
+      uncheckedTitles,
+    );
+
     return saved;
   }
 

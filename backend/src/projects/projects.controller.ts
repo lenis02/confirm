@@ -166,6 +166,22 @@ export class ProjectsController {
     return this.wbsService.updateItem(user.id, projectId, milestoneId, dto);
   }
 
+  @Delete(':projectId/wbs/:itemId')
+  @HttpCode(204)
+  deleteWbsItem(
+    @CurrentUser() user: User,
+    @Param('projectId') projectId: string,
+    @Param('itemId') itemId: string,
+  ) {
+    return this.wbsService.deleteItem(user.id, projectId, itemId);
+  }
+
+  @Delete(':projectId/wbs')
+  @HttpCode(204)
+  deleteWbs(@CurrentUser() user: User, @Param('projectId') projectId: string) {
+    return this.wbsService.deleteWbs(user.id, projectId);
+  }
+
   @Get(':projectId/meeting-recommendations')
   getMeetingRecommendations(
     @CurrentUser() user: User,

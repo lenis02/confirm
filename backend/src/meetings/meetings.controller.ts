@@ -18,6 +18,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
 import { MeetingStatus } from './entities/meeting.entity';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
+import { CreateMeetingsFromRecommendationsDto } from './dto/create-meetings-from-recommendations.dto';
 import { UpdateChecklistsDto } from './dto/update-checklists.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { MeetingsService } from './meetings.service';
@@ -114,5 +115,14 @@ export class ProjectMeetingsController {
     @Body() dto: CreateMeetingDto,
   ) {
     return this.meetingsService.createMeeting(user.id, projectId, dto);
+  }
+
+  @Post('from-recommendations')
+  createFromRecommendations(
+    @CurrentUser() user: User,
+    @Param('projectId') projectId: string,
+    @Body() dto: CreateMeetingsFromRecommendationsDto,
+  ) {
+    return this.meetingsService.createFromRecommendations(user.id, projectId, dto.meetings);
   }
 }

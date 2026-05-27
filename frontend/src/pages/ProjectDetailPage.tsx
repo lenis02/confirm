@@ -41,6 +41,7 @@ const WBS_COLUMNS: { key: WbsSortKey | null; label: string }[] = [
   { key: 'startDate', label: '시작일' },
   { key: 'endDate', label: '종료일' },
   { key: null, label: '확인' },
+  { key: null, label: '삭제' },
 ];
 const ROLE_COLOR: Record<string, string> = {
   PM: 'bg-orange-50 text-orange-600 border-orange-200',
@@ -142,6 +143,20 @@ function WbsTab({ projectId }: { projectId: string }) {
   const toggleDecision = async (itemId: string, current: boolean) => {
     const updated = await projectsApi.updateWbsItem(projectId, itemId, { isDecisionPoint: !current });
     setWbs(prev => prev ? { ...prev, items: prev.items.map(i => i.id === itemId ? updated : i) } : prev);
+  };
+
+  const removeItem = async (item: WbsItem) => {
+    if (!window.confirm(`'${item.title}' 항목을 삭제하시겠습니까?`)) return;
+    await projectsApi.deleteWbsItem(projectId, item.id);
+    setModalItem(null);
+    await loadWbs(); // 삭제 후 재정렬된 ID 반영을 위해 다시 로드
+  };
+
+  const removeWbs = async () => {
+    if (!window.confirm('WBS 전체를 삭제하시겠습니까? 모든 태스크가 함께 삭제됩니다.')) return;
+    await projectsApi.deleteWbs(projectId);
+    setWbs(null);
+    setWbsError(false);
   };
 
   const openItemModal = (item: WbsItem) => {
@@ -262,12 +277,18 @@ function WbsTab({ projectId }: { projectId: string }) {
                 </button>
               </div>
             </div>
-            {wbs.status === 'DRAFT' && (
-              <button onClick={confirm} disabled={confirming}
-                className="bg-orange-500 text-white px-3 py-1.5 rounded text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer">
-                {confirming ? '확정 중...' : 'WBS 확정'}
+            <div className="flex items-center gap-2">
+              {wbs.status === 'DRAFT' && (
+                <button onClick={confirm} disabled={confirming}
+                  className="bg-orange-500 text-white px-3 py-1.5 rounded text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer">
+                  {confirming ? '확정 중...' : 'WBS 확정'}
+                </button>
+              )}
+              <button onClick={removeWbs}
+                className="border border-red-200 text-red-500 px-3 py-1.5 rounded text-sm hover:bg-red-50 transition cursor-pointer">
+                전체 삭제
               </button>
-            )}
+            </div>
           </div>
           {wbs.projectSummary && (
             <p className="text-xs text-gray-600 bg-yellow-50 border border-yellow-100 rounded px-3 py-2 mb-3">{wbs.projectSummary}</p>
@@ -323,6 +344,12 @@ function WbsTab({ projectId }: { projectId: string }) {
                       <button onClick={() => toggleDecision(item.id, item.isDecisionPoint)}
                         className={`w-4 h-4 border flex items-center justify-center transition cursor-pointer rounded-sm ${item.isDecisionPoint ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-300 hover:border-orange-400'}`}>
                         {item.isDecisionPoint && <span className="text-xs leading-none">✓</span>}
+                      </button>
+                    </td>
+                    <td className="px-3 py-2">
+                      <button onClick={() => removeItem(item)}
+                        className="text-xs text-red-400 hover:text-red-600 transition cursor-pointer">
+                        삭제
                       </button>
                     </td>
                   </tr>
@@ -400,6 +427,8 @@ function WbsTab({ projectId }: { projectId: string }) {
             )}
 
             <div className="flex gap-2 pt-1">
+              <button onClick={() => modalItem && removeItem(modalItem)}
+                className="border border-red-200 text-red-500 rounded py-2 px-3 text-sm hover:bg-red-50 transition cursor-pointer">삭제</button>
               <button onClick={() => setModalItem(null)}
                 className="flex-1 border border-gray-300 rounded py-2 text-sm text-gray-600 hover:bg-gray-50 transition cursor-pointer">취소</button>
               <button onClick={saveItem} disabled={savingItem}

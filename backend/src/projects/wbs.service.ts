@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -12,6 +13,17 @@ import { MemberRole } from './entities/project-member.entity';
 import { ProjectWbs, WbsStatus } from './entities/project-wbs.entity';
 import { WbsItem } from './entities/wbs-item.entity';
 import { LlmService } from '../common/llm/llm.service';
+import { Meeting, MeetingType } from '../meetings/entities/meeting.entity';
+import { MeetingChecklist } from '../meetings/entities/meeting-checklist.entity';
+
+// 킥오프 회의 기본 체크리스트 (meetings.service의 KICKOFF 템플릿과 동일)
+const KICKOFF_CHECKLIST = [
+  '프로젝트 목표 및 범위 공유',
+  '팀원 역할 및 책임 명확화',
+  '일정 및 마일스톤 확인',
+  '커뮤니케이션 채널 결정',
+  'WBS 검토 및 승인',
+];
 
 export class UpdateWbsItemDto {
   @IsOptional() @IsString() title?: string;
@@ -25,11 +37,17 @@ export class UpdateWbsItemDto {
 
 @Injectable()
 export class WbsService {
+  private readonly logger = new Logger(WbsService.name);
+
   constructor(
     @InjectRepository(ProjectWbs)
     private readonly wbsRepo: Repository<ProjectWbs>,
     @InjectRepository(WbsItem)
     private readonly itemRepo: Repository<WbsItem>,
+    @InjectRepository(Meeting)
+    private readonly meetingRepo: Repository<Meeting>,
+    @InjectRepository(MeetingChecklist)
+    private readonly checklistRepo: Repository<MeetingChecklist>,
     private readonly projectsService: ProjectsService,
     private readonly llmService: LlmService,
   ) {}
@@ -38,6 +56,7 @@ export class WbsService {
     projectId: string,
     documentId: string,
     documentText: string,
+    createdById: string,
   ): Promise<ProjectWbs> {
     const result = await this.llmService.generateWbs(documentText);
 
@@ -75,7 +94,47 @@ export class WbsService {
     });
     await this.itemRepo.save(items);
 
+    // WBS 생성 직후 킥오프 회의 자동 생성 (실패해도 WBS 결과는 반환)
+    try {
+      await this.createKickoffMeeting(projectId, items, createdById);
+    } catch (err) {
+      this.logger.warn('킥오프 회의 자동 생성 실패', err as Error);
+    }
+
     return this.findWbs(projectId);
+  }
+
+  private async createKickoffMeeting(
+    projectId: string,
+    items: WbsItem[],
+    createdById: string,
+  ): Promise<void> {
+    // 이미 킥오프가 있으면 (문서 재업로드 등) 중복 생성 방지
+    const exists = await this.meetingRepo.findOne({
+      where: { projectId, type: MeetingType.KICKOFF },
+    });
+    if (exists) return;
+
+    // 가장 이른 태스크 시작일을 킥오프 일정으로, 없으면 오늘
+    const startTimes = items
+      .map((i) => i.startDate)
+      .filter((d): d is Date => !!d)
+      .map((d) => new Date(d).getTime());
+    const scheduledAt = startTimes.length ? new Date(Math.min(...startTimes)) : new Date();
+
+    const meeting = this.meetingRepo.create({
+      projectId,
+      createdById,
+      title: '킥오프 회의',
+      type: MeetingType.KICKOFF,
+      scheduledAt,
+    });
+    const saved = await this.meetingRepo.save(meeting);
+
+    const checklists = KICKOFF_CHECKLIST.map((content, order) =>
+      this.checklistRepo.create({ meetingId: saved.id, content, order }),
+    );
+    await this.checklistRepo.save(checklists);
   }
 
   async findWbs(projectId: string, userId?: string): Promise<ProjectWbs> {
@@ -130,47 +189,83 @@ export class WbsService {
     return this.itemRepo.save(item);
   }
 
-  async getMeetingRecommendations(userId: string, projectId: string): Promise<object[]> {
+  async deleteItem(userId: string, projectId: string, itemId: string): Promise<void> {
+    await this.assertPm(userId, projectId);
+
+    const item = await this.itemRepo.findOne({ where: { id: itemId, projectId } });
+    if (!item) throw new NotFoundException('WBS 항목을 찾을 수 없습니다.');
+
+    await this.itemRepo.remove(item);
+    await this.resequenceItems(projectId);
+  }
+
+  // 삭제 후 남은 항목의 순번(order)·표시 ID(taskId)를 1부터 연속되게 재부여 (빈 ID 방지)
+  private async resequenceItems(projectId: string): Promise<void> {
+    const items = await this.itemRepo.find({
+      where: { projectId },
+      order: { order: 'ASC' },
+    });
+
+    items.forEach((it, idx) => {
+      it.order = idx + 1;
+      it.taskId = `T${String(idx + 1).padStart(2, '0')}`;
+    });
+
+    if (items.length > 0) await this.itemRepo.save(items);
+  }
+
+  async deleteWbs(userId: string, projectId: string): Promise<void> {
+    await this.assertPm(userId, projectId);
+
+    const wbs = await this.wbsRepo.findOne({ where: { projectId } });
+    if (!wbs) throw new NotFoundException('WBS가 존재하지 않습니다.');
+
+    // wbs_items는 FK onDelete CASCADE로 함께 삭제됨
+    await this.wbsRepo.remove(wbs);
+  }
+
+  async getMeetingRecommendations(userId: string, projectId: string): Promise<object> {
     await this.projectsService.findOne(userId, projectId);
 
     const wbs = await this.wbsRepo.findOne({
       where: { projectId, status: WbsStatus.CONFIRMED },
+      relations: ['items'],
+      order: { items: { order: 'ASC' } },
     });
     if (!wbs) throw new BadRequestException('확정된 WBS가 없습니다. WBS를 먼저 확정하세요.');
 
-    const milestones = await this.itemRepo.find({
-      where: { projectId, isDecisionPoint: true },
-      order: { order: 'ASC' },
-    });
+    const raws = await this.llmService.recommendMeetings(this.buildWbsContext(wbs));
 
-    return milestones.map((m) => ({
-      milestoneId: m.id,
-      milestoneTitle: m.title,
-      phase: m.phase,
-      milestoneDate: m.startDate,
-      recommendedMeetingDate: this.subtractDays(m.startDate, 2),
-      meetingType: this.recommendMeetingType(m.phase),
-    }));
+    const recommendations = raws
+      .map((r) => ({
+        title: r.title,
+        meetingType: this.normalizeMeetingType(r.meeting_type),
+        suggestedDate: r.suggested_date,
+        reason: r.reason,
+        relatedPhase: r.related_phase ?? null,
+      }))
+      .filter((r) => r.meetingType !== null);
+
+    return { recommendations };
   }
 
-  private subtractDays(date: Date | null, days: number): string | null {
-    if (!date) return null;
-    const d = new Date(date);
-    d.setDate(d.getDate() - days);
-    return d.toISOString().split('T')[0];
+  private buildWbsContext(wbs: ProjectWbs): string {
+    const lines: string[] = [];
+    if (wbs.projectSummary) lines.push(`프로젝트 요약: ${wbs.projectSummary}`);
+    if (wbs.totalDuration) lines.push(`전체 기간: ${wbs.totalDuration}`);
+    lines.push('태스크 목록:');
+    for (const item of wbs.items ?? []) {
+      const start = item.startDate ? new Date(item.startDate).toISOString().split('T')[0] : '미정';
+      const end = item.endDate ? new Date(item.endDate).toISOString().split('T')[0] : '미정';
+      lines.push(`- [${item.phase}] ${item.title} (시작: ${start}, 종료: ${end})`);
+    }
+    return lines.join('\n');
   }
 
-  private recommendMeetingType(phase: string): string {
-    const map: Record<string, string> = {
-      계획: 'KICKOFF',
-      분석: 'ISSUE_CHECK',
-      설계: 'CONSENSUS',
-      개발: 'PROGRESS_CHECK',
-      테스트: 'ISSUE_CHECK',
-      배포: 'CONSENSUS',
-      유지보수: 'PROGRESS_CHECK',
-    };
-    return map[phase] ?? 'PROGRESS_CHECK';
+  private normalizeMeetingType(value: string): string | null {
+    const valid = ['KICKOFF', 'PROGRESS_CHECK', 'ISSUE_CHECK', 'CONSENSUS'];
+    const v = (value ?? '').toUpperCase();
+    return valid.includes(v) ? v : null;
   }
 
   private async assertPm(userId: string, projectId: string): Promise<void> {
