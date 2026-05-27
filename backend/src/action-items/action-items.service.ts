@@ -29,6 +29,26 @@ export class ActionItemsService {
     return this.findOneRaw(saved.id);
   }
 
+  // 회의 완료 시 미완료 체크리스트 항목을 Action Item으로 자동 생성 (담당자·기한은 후속 지정)
+  async createFromChecklists(
+    projectId: string,
+    meetingId: string,
+    userId: string,
+    titles: string[],
+  ): Promise<ActionItem[]> {
+    if (titles.length === 0) return [];
+
+    const items = titles.map((title) =>
+      this.actionItemRepo.create({
+        projectId,
+        meetingId,
+        title,
+        createdById: userId,
+      }),
+    );
+    return this.actionItemRepo.save(items);
+  }
+
   async findByProject(
     userId: string,
     projectId: string,

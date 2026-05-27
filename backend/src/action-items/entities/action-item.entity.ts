@@ -33,18 +33,18 @@ export class ActionItem {
   @Column()
   title: string;
 
-  @Column({ name: 'assignee_id' })
-  assigneeId: string;
+  @Column({ name: 'assignee_id', nullable: true })
+  assigneeId: string | null;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'assignee_id' })
   assignee: User;
 
   @Column({ type: 'enum', enum: ActionItemStatus, default: ActionItemStatus.PENDING })
   status: ActionItemStatus;
 
-  @Column({ name: 'due_date', type: 'date' })
-  dueDate: Date;
+  @Column({ name: 'due_date', type: 'date', nullable: true })
+  dueDate: Date | null;
 
   @Column({ name: 'completed_at', type: 'timestamptz', nullable: true })
   completedAt: Date | null;

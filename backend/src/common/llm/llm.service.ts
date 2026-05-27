@@ -2,6 +2,7 @@ import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { WBS_GENERATOR_SYSTEM_PROMPT } from '../../prompts/wbs-generator.prompt';
+import { MEETING_RECOMMENDER_SYSTEM_PROMPT } from '../../prompts/meeting-recommender.prompt';
 
 // --- Claude API (추후 전환 시 주석 해제) ---
 // import Anthropic from '@anthropic-ai/sdk';
@@ -31,6 +32,14 @@ export interface WbsGenerationResult {
     team_resources: TeamResourceRaw[];
   };
   wbs_tasks: WbsTaskRaw[];
+}
+
+export interface MeetingRecommendationRaw {
+  title: string;
+  meeting_type: string;
+  suggested_date: string;
+  reason: string;
+  related_phase?: string;
 }
 
 @Injectable()
@@ -65,6 +74,31 @@ export class LlmService {
 
     // --- Claude 호출 (추후 전환 시 주석 해제 후 위 줄 제거) ---
     // return this.generateWithClaude(documentText);
+  }
+
+  async recommendMeetings(wbsContext: string): Promise<MeetingRecommendationRaw[]> {
+    try {
+      const model = this.genAI.getGenerativeModel({
+        model: this.modelName,
+        systemInstruction: MEETING_RECOMMENDER_SYSTEM_PROMPT,
+      });
+
+      const result = await model.generateContent(
+        `<wbs_data>\n${wbsContext}\n</wbs_data>`,
+      );
+
+      const text = result.response.text().trim();
+      const cleaned = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+      const parsed: { recommendations?: MeetingRecommendationRaw[] } = JSON.parse(cleaned);
+
+      if (!parsed.recommendations || !Array.isArray(parsed.recommendations)) {
+        throw new Error('회의 추천 결과가 올바른 형식이 아닙니다.');
+      }
+      return parsed.recommendations;
+    } catch (err) {
+      this.logger.error(`Gemini 회의 추천 실패 (model=${this.modelName})`, err);
+      throw new InternalServerErrorException('회의 추천 중 오류가 발생했습니다.');
+    }
   }
 
   private async generateWithGemini(documentText: string): Promise<WbsGenerationResult> {

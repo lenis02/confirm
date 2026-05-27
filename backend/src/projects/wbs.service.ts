@@ -130,47 +130,48 @@ export class WbsService {
     return this.itemRepo.save(item);
   }
 
-  async getMeetingRecommendations(userId: string, projectId: string): Promise<object[]> {
+  async getMeetingRecommendations(userId: string, projectId: string): Promise<object> {
     await this.projectsService.findOne(userId, projectId);
 
     const wbs = await this.wbsRepo.findOne({
       where: { projectId, status: WbsStatus.CONFIRMED },
+      relations: ['items'],
+      order: { items: { order: 'ASC' } },
     });
     if (!wbs) throw new BadRequestException('확정된 WBS가 없습니다. WBS를 먼저 확정하세요.');
 
-    const milestones = await this.itemRepo.find({
-      where: { projectId, isDecisionPoint: true },
-      order: { order: 'ASC' },
-    });
+    const raws = await this.llmService.recommendMeetings(this.buildWbsContext(wbs));
 
-    return milestones.map((m) => ({
-      milestoneId: m.id,
-      milestoneTitle: m.title,
-      phase: m.phase,
-      milestoneDate: m.startDate,
-      recommendedMeetingDate: this.subtractDays(m.startDate, 2),
-      meetingType: this.recommendMeetingType(m.phase),
-    }));
+    const recommendations = raws
+      .map((r) => ({
+        title: r.title,
+        meetingType: this.normalizeMeetingType(r.meeting_type),
+        suggestedDate: r.suggested_date,
+        reason: r.reason,
+        relatedPhase: r.related_phase ?? null,
+      }))
+      .filter((r) => r.meetingType !== null);
+
+    return { recommendations };
   }
 
-  private subtractDays(date: Date | null, days: number): string | null {
-    if (!date) return null;
-    const d = new Date(date);
-    d.setDate(d.getDate() - days);
-    return d.toISOString().split('T')[0];
+  private buildWbsContext(wbs: ProjectWbs): string {
+    const lines: string[] = [];
+    if (wbs.projectSummary) lines.push(`프로젝트 요약: ${wbs.projectSummary}`);
+    if (wbs.totalDuration) lines.push(`전체 기간: ${wbs.totalDuration}`);
+    lines.push('태스크 목록:');
+    for (const item of wbs.items ?? []) {
+      const start = item.startDate ? new Date(item.startDate).toISOString().split('T')[0] : '미정';
+      const end = item.endDate ? new Date(item.endDate).toISOString().split('T')[0] : '미정';
+      lines.push(`- [${item.phase}] ${item.title} (시작: ${start}, 종료: ${end})`);
+    }
+    return lines.join('\n');
   }
 
-  private recommendMeetingType(phase: string): string {
-    const map: Record<string, string> = {
-      계획: 'KICKOFF',
-      분석: 'ISSUE_CHECK',
-      설계: 'CONSENSUS',
-      개발: 'PROGRESS_CHECK',
-      테스트: 'ISSUE_CHECK',
-      배포: 'CONSENSUS',
-      유지보수: 'PROGRESS_CHECK',
-    };
-    return map[phase] ?? 'PROGRESS_CHECK';
+  private normalizeMeetingType(value: string): string | null {
+    const valid = ['KICKOFF', 'PROGRESS_CHECK', 'ISSUE_CHECK', 'CONSENSUS'];
+    const v = (value ?? '').toUpperCase();
+    return valid.includes(v) ? v : null;
   }
 
   private async assertPm(userId: string, projectId: string): Promise<void> {
