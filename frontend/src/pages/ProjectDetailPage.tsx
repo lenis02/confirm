@@ -1283,7 +1283,7 @@ export default function ProjectDetailPage() {
       {tab === 'wbs' && <WbsTab projectId={project.id} />}
       {tab === 'meetings' && <MeetingsTab projectId={project.id} />}
       {tab === 'members' && <MembersTab projectId={project.id} />}
-      {tab === 'actions' && <ActionItemsTab projectId={project.id} members={project.members} deptFilter={deptFilter} />}
+      {/* {tab === 'actions' && <ActionItemsTab projectId={project.id} members={project.members} deptFilter={deptFilter} />} */}
     </div>
   );
 }

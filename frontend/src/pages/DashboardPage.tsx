@@ -259,7 +259,7 @@ export default function DashboardPage() {
                     </div>
 
                     {/* 프로젝트 바 (이벤트 포함) */}
-                    <div className="space-y-px flex-1 min-h-0 overflow-hidden">
+                    <div className="space-y-px flex-1 min-h-0">
                       {bars.map(({ projectId, isStart, isEnd }) => {
                         const color = getProjectColor(projectId);
                         const proj = projects.find(p => p.id === projectId);
