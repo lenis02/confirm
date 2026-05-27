@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -9,11 +10,18 @@ import { LessThan, Repository } from 'typeorm';
 import { ProjectsService } from '../projects/projects.service';
 import { MemberRole } from '../projects/entities/project-member.entity';
 import { ActionItemsService } from '../action-items/action-items.service';
+import { User } from '../users/entities/user.entity';
+import {
+  GoogleCalendarService,
+  CalendarEventInput,
+} from '../common/google/google-calendar.service';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateChecklistsDto } from './dto/update-checklists.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { MeetingChecklist } from './entities/meeting-checklist.entity';
 import { Meeting, MeetingStatus, MeetingType, SttStatus } from './entities/meeting.entity';
+
+const MEETING_DURATION_MS = 60 * 60 * 1000; // 캘린더 일정 기본 길이 1시간
 
 const DEFAULT_CHECKLISTS: Record<MeetingType, string[]> = {
   [MeetingType.KICKOFF]: [
@@ -48,13 +56,18 @@ const DEFAULT_CHECKLISTS: Record<MeetingType, string[]> = {
 
 @Injectable()
 export class MeetingsService {
+  private readonly logger = new Logger(MeetingsService.name);
+
   constructor(
     @InjectRepository(Meeting)
     private readonly meetingRepo: Repository<Meeting>,
     @InjectRepository(MeetingChecklist)
     private readonly checklistRepo: Repository<MeetingChecklist>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     private readonly projectsService: ProjectsService,
     private readonly actionItemsService: ActionItemsService,
+    private readonly googleCalendar: GoogleCalendarService,
   ) {}
 
   async createMeeting(userId: string, projectId: string, dto: CreateMeetingDto): Promise<Meeting> {
@@ -73,6 +86,8 @@ export class MeetingsService {
       this.checklistRepo.create({ meetingId: saved.id, content, order: index }),
     );
     await this.checklistRepo.save(checklists);
+
+    await this.syncCalendarCreate(userId, saved);
 
     return this.findOne(userId, saved.id);
   }
@@ -128,6 +143,8 @@ export class MeetingsService {
     if (dto.scheduledAt) meeting.scheduledAt = new Date(dto.scheduledAt);
     await this.meetingRepo.save(meeting);
 
+    await this.syncCalendarUpdate(meeting);
+
     return this.findOne(userId, meetingId);
   }
 
@@ -135,6 +152,7 @@ export class MeetingsService {
     const meeting = await this.findOne(userId, meetingId);
     this.assertScheduled(meeting);
     await this.assertPm(userId, meeting.projectId);
+    await this.syncCalendarDelete(meeting);
     await this.meetingRepo.remove(meeting);
   }
 
@@ -272,6 +290,63 @@ export class MeetingsService {
       checklists,
       transcript: meeting.transcript,
     };
+  }
+
+  // ── 구글 캘린더 동기화 (best-effort: 실패해도 회의 작업은 정상 진행) ──
+  private buildCalendarEvent(meeting: Meeting): CalendarEventInput {
+    const start = new Date(meeting.scheduledAt);
+    return {
+      summary: `[회의] ${meeting.title}`,
+      description: `유형: ${meeting.type}`,
+      start,
+      end: new Date(start.getTime() + MEETING_DURATION_MS),
+    };
+  }
+
+  private async getRefreshToken(userId: string): Promise<string | null> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    return user?.googleRefreshToken ?? null;
+  }
+
+  private async syncCalendarCreate(userId: string, meeting: Meeting): Promise<void> {
+    try {
+      const refreshToken = await this.getRefreshToken(userId);
+      if (!refreshToken) return;
+      const eventId = await this.googleCalendar.createEvent(
+        refreshToken,
+        this.buildCalendarEvent(meeting),
+      );
+      if (eventId) await this.meetingRepo.update(meeting.id, { googleEventId: eventId });
+    } catch (err) {
+      this.logger.warn('구글 캘린더 생성 동기화 실패', err as Error);
+    }
+  }
+
+  private async syncCalendarUpdate(meeting: Meeting): Promise<void> {
+    if (!meeting.googleEventId) return;
+    try {
+      // 이벤트는 생성자(createdById)의 캘린더에 있으므로 그 계정 토큰 사용
+      const refreshToken = await this.getRefreshToken(meeting.createdById);
+      if (!refreshToken) return;
+      await this.googleCalendar.updateEvent(
+        refreshToken,
+        meeting.googleEventId,
+        this.buildCalendarEvent(meeting),
+      );
+    } catch (err) {
+      this.logger.warn('구글 캘린더 수정 동기화 실패', err as Error);
+    }
+  }
+
+  private async syncCalendarDelete(meeting: Meeting): Promise<void> {
+    if (!meeting.googleEventId) return;
+    try {
+      const refreshToken = await this.getRefreshToken(meeting.createdById);
+      if (!refreshToken) return;
+      await this.googleCalendar.deleteEvent(refreshToken, meeting.googleEventId);
+    } catch (err) {
+      this.logger.warn('구글 캘린더 삭제 동기화 실패', err as Error);
+    }
   }
 
   private assertScheduled(meeting: Meeting): void {

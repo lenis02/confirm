@@ -71,6 +71,10 @@ export class Meeting {
   @Column({ nullable: true, type: 'text' })
   transcript: string;
 
+  // 연동된 구글 캘린더 이벤트 ID (수정/삭제 동기화용)
+  @Column({ name: 'google_event_id', type: 'varchar', nullable: true })
+  googleEventId: string | null;
+
   @Column({ name: 'created_by_id' })
   createdById: string;
 
