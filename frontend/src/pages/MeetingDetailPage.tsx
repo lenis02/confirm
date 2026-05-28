@@ -278,7 +278,7 @@ function MetricsTab({ meeting }: { meeting: Meeting }) {
               <span className={`w-4 h-4 border flex items-center justify-center shrink-0 rounded-sm text-xs ${item.isDone ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-300 text-transparent'}`}>
                 ✓
               </span>
-              <span className={item.isDone ? 'text-gray-700' : 'text-gray-400 line-through'}>{item.content}</span>
+              <span className={item.isDone ? 'text-gray-700' : 'text-gray-400'}>{item.content}</span>
             </div>
           ))}
         </div>
