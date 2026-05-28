@@ -8,11 +8,15 @@ import {
   Patch,
   Post,
   Query,
+  Res,
+  StreamableFile,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
@@ -67,25 +71,59 @@ export class MeetingsController {
     return this.meetingsService.getBriefing(user.id, meetingId);
   }
 
-  @Post(':meetingId/stt')
-  @UseInterceptors(FileInterceptor('audio'))
-  uploadStt(
+  // STT 기능 보류 — 회의록 직접 업로드(/minutes)로 대체됨. 추후 재사용 위해 주석 보존.
+  // @Post(':meetingId/stt')
+  // @UseInterceptors(FileInterceptor('audio'))
+  // uploadStt(
+  //   @CurrentUser() user: User,
+  //   @Param('meetingId') meetingId: string,
+  //   @UploadedFile() _file: any,
+  // ) {
+  //   return this.meetingsService.uploadStt(user.id, meetingId);
+  // }
+
+  // @Get(':meetingId/transcript')
+  // getTranscript(@CurrentUser() user: User, @Param('meetingId') meetingId: string) {
+  //   return this.meetingsService.getTranscript(user.id, meetingId);
+  // }
+
+  @Post(':meetingId/minutes')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  uploadMinutes(
     @CurrentUser() user: User,
     @Param('meetingId') meetingId: string,
-    @UploadedFile() _file: any,
+    @UploadedFile() file: Express.Multer.File,
   ) {
-    return this.meetingsService.uploadStt(user.id, meetingId);
+    return this.meetingsService.uploadMinutes(user.id, meetingId, file);
   }
 
-  @Get(':meetingId/transcript')
-  getTranscript(@CurrentUser() user: User, @Param('meetingId') meetingId: string) {
-    return this.meetingsService.getTranscript(user.id, meetingId);
+  @Get(':meetingId/minutes')
+  async downloadMinutes(
+    @CurrentUser() user: User,
+    @Param('meetingId') meetingId: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const { fileName, mimeType, content } = await this.meetingsService.downloadMinutes(
+      user.id,
+      meetingId,
+    );
+    res.set({
+      'Content-Type': mimeType,
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+    });
+    return new StreamableFile(content);
   }
 
   @Post(':meetingId/completion')
   @HttpCode(200)
   completeMeeting(@CurrentUser() user: User, @Param('meetingId') meetingId: string) {
     return this.meetingsService.completeMeeting(user.id, meetingId);
+  }
+
+  @Post(':meetingId/reopen')
+  @HttpCode(200)
+  reopenMeeting(@CurrentUser() user: User, @Param('meetingId') meetingId: string) {
+    return this.meetingsService.reopenMeeting(user.id, meetingId);
   }
 
   @Get(':meetingId/metrics')

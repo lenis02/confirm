@@ -57,19 +57,37 @@ export class Meeting {
   scheduledAt: Date;
 
   @Column({ name: 'completed_at', type: 'timestamptz', nullable: true })
-  completedAt: Date;
+  completedAt: Date | null;
 
   @Column({ nullable: true, type: 'text' })
   summary: string;
 
   @Column({ name: 'achievement_rate', type: 'float', nullable: true })
-  achievementRate: number;
+  achievementRate: number | null;
 
   @Column({ name: 'stt_status', type: 'enum', enum: SttStatus, nullable: true })
   sttStatus: SttStatus;
 
   @Column({ nullable: true, type: 'text' })
   transcript: string;
+
+  // 업로드된 회의록 파일 (hwp/doc/docx/pdf) — 배포 환경 디스크가 휘발성이라 DB(bytea)에 보관
+  @Column({ name: 'minutes_file_name', type: 'varchar', nullable: true })
+  minutesFileName: string | null;
+
+  @Column({ name: 'minutes_mime_type', type: 'varchar', nullable: true })
+  minutesMimeType: string | null;
+
+  @Column({ name: 'minutes_file_size', type: 'int', nullable: true })
+  minutesFileSize: number | null;
+
+  // 본문 바이트는 평소 조회에 불필요하므로 select:false (다운로드 시에만 명시적으로 로드)
+  @Column({ name: 'minutes_content', type: 'bytea', nullable: true, select: false })
+  minutesContent: Buffer | null;
+
+  // 연동된 구글 캘린더 이벤트 ID (수정/삭제 동기화용)
+  @Column({ name: 'google_event_id', type: 'varchar', nullable: true })
+  googleEventId: string | null;
 
   @Column({ name: 'created_by_id' })
   createdById: string;

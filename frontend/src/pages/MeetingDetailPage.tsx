@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { meetingsApi } from '../api/meetings';
 import type { Meeting, MeetingChecklist, MeetingMetrics, MeetingBriefing } from '../types';
 
-type Tab = 'overview' | 'checklist' | 'stt' | 'metrics';
+type Tab = 'overview' | 'checklist' | 'minutes' | 'metrics';
 
 const MEETING_TYPE_LABEL: Record<string, string> = {
   KICKOFF: '킥오프', PROGRESS_CHECK: '진도점검', ISSUE_CHECK: '이슈체크', CONSENSUS: '합의',
@@ -21,10 +21,10 @@ const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
 };
 
 // ── 개요 탭 ───────────────────────────────────────────────────────────────────
-function OverviewTab({ meeting }: { meeting: Meeting }) {
+function OverviewTab({ meeting, onMeetingChange }: { meeting: Meeting; onMeetingChange: (m: Meeting) => void }) {
   const [briefing, setBriefing] = useState<MeetingBriefing | null>(null);
   const [completing, setCompleting] = useState(false);
-  const navigate = useNavigate();
+  const [reopening, setReopening] = useState(false);
 
   useEffect(() => {
     meetingsApi.getBriefing(meeting.id).then(setBriefing).catch(() => {});
@@ -34,9 +34,16 @@ function OverviewTab({ meeting }: { meeting: Meeting }) {
     if (!confirm('회의를 완료 처리하시겠습니까?')) return;
     setCompleting(true);
     try {
-      await meetingsApi.complete(meeting.id);
-      navigate(0); // refresh
+      onMeetingChange(await meetingsApi.complete(meeting.id));
     } finally { setCompleting(false); }
+  };
+
+  const reopen = async () => {
+    if (!confirm('회의를 진행 중 상태로 되돌리시겠습니까?\n완료 시 이월된 미완료 체크리스트 항목이 취소됩니다.')) return;
+    setReopening(true);
+    try {
+      onMeetingChange(await meetingsApi.reopen(meeting.id));
+    } finally { setReopening(false); }
   };
 
   return (
@@ -54,7 +61,7 @@ function OverviewTab({ meeting }: { meeting: Meeting }) {
           <span className={`inline-flex w-fit text-xs px-1.5 py-0.5 border rounded ${STATUS_LABEL[meeting.status].cls}`}>
             {STATUS_LABEL[meeting.status].label}
           </span>
-          {meeting.achievementRate !== undefined && (
+          {meeting.achievementRate != null && (
             <>
               <span className="text-gray-400">체크리스트 달성률</span>
               <span className="text-gray-800 font-medium">{meeting.achievementRate}%</span>
@@ -78,8 +85,8 @@ function OverviewTab({ meeting }: { meeting: Meeting }) {
         </div>
       )}
 
-      {meeting.status !== 'COMPLETED' && (
-        <div className="flex justify-end">
+      <div className="flex justify-end">
+        {meeting.status !== 'COMPLETED' ? (
           <button
             onClick={complete}
             disabled={completing}
@@ -87,8 +94,16 @@ function OverviewTab({ meeting }: { meeting: Meeting }) {
           >
             {completing ? '처리 중...' : '회의 완료 처리'}
           </button>
-        </div>
-      )}
+        ) : (
+          <button
+            onClick={reopen}
+            disabled={reopening}
+            className="border border-gray-300 text-gray-600 px-4 py-2 rounded text-sm hover:bg-gray-50 transition disabled:opacity-50 cursor-pointer"
+          >
+            {reopening ? '처리 중...' : '진행 중으로 되돌리기'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -184,65 +199,100 @@ function ChecklistTab({ meeting }: { meeting: Meeting }) {
   );
 }
 
-// ── STT 탭 ───────────────────────────────────────────────────────────────────
-function SttTab({ meeting }: { meeting: Meeting }) {
-  const [transcript, setTranscript] = useState<string | null>(null);
+// ── 회의록 업로드 탭 ──────────────────────────────────────────────────────────
+const MINUTES_ACCEPT = '.hwp,.doc,.docx,.pdf';
+const MINUTES_EXT = ['hwp', 'doc', 'docx', 'pdf'];
+
+function MinutesUploadTab({ meeting, onMeetingChange }: { meeting: Meeting; onMeetingChange: (m: Meeting) => void }) {
   const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    meetingsApi.getTranscript(meeting.id)
-      .then(r => setTranscript(r.transcript))
-      .catch(() => {});
-  }, [meeting.id]);
-
-  const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const upload = async (file: File) => {
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+    if (!MINUTES_EXT.includes(ext)) {
+      alert('hwp, doc, docx, pdf 파일만 업로드할 수 있습니다.');
+      return;
+    }
     setUploading(true);
     try {
-      await meetingsApi.uploadStt(meeting.id, file);
-      alert('STT 변환이 시작됐습니다. 완료 후 조회하세요.');
+      onMeetingChange(await meetingsApi.uploadMinutes(meeting.id, file));
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
     }
   };
 
+  const onSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) upload(file);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) upload(file);
+  };
+
   return (
     <div className="space-y-4">
-      <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded p-5 text-center">
-        <p className="text-xs text-gray-400 mb-3">녹음 파일을 업로드하면 STT 변환이 시작됩니다</p>
-        <input ref={fileRef} type="file" accept="audio/*" className="hidden" onChange={upload} />
+      <div
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+        onClick={() => fileRef.current?.click()}
+        className={`border-2 border-dashed rounded p-8 text-center cursor-pointer transition ${
+          dragOver ? 'border-orange-400 bg-orange-50' : 'border-gray-200 bg-gray-50 hover:border-orange-300'
+        }`}
+      >
+        <p className="text-sm text-gray-500 mb-1">회의록 파일을 여기로 드래그하거나 클릭해서 업로드</p>
+        <p className="text-xs text-gray-400 mb-3">hwp · doc · docx · pdf 지원</p>
+        <input ref={fileRef} type="file" accept={MINUTES_ACCEPT} className="hidden" onChange={onSelect} />
         <button
-          onClick={() => fileRef.current?.click()}
+          type="button"
           disabled={uploading}
           className="border border-orange-400 text-orange-600 px-4 py-1.5 rounded text-sm hover:bg-orange-50 transition disabled:opacity-50 cursor-pointer"
         >
-          {uploading ? '업로드 중...' : '녹음 파일 선택'}
+          {uploading ? '업로드 중...' : '파일 선택'}
         </button>
       </div>
 
-      {transcript && (
-        <div className="bg-white border border-gray-200 rounded p-4">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">변환된 텍스트</h3>
-          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{transcript}</p>
+      {meeting.minutesFileName && (
+        <div className="bg-white border border-gray-200 rounded p-4 flex items-center gap-2 text-sm">
+          <span className="text-xs bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded shrink-0">업로드됨</span>
+          <span className="text-gray-700 truncate">{meeting.minutesFileName}</span>
+          <span className="text-xs text-gray-400 ml-auto shrink-0">회의 요약 탭에서 다운로드</span>
         </div>
       )}
     </div>
   );
 }
 
-// ── 회의록 탭 ─────────────────────────────────────────────────────────────────
+// ── 회의 요약 탭 ──────────────────────────────────────────────────────────────
 function MetricsTab({ meeting }: { meeting: Meeting }) {
   const [metrics, setMetrics] = useState<MeetingMetrics | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     meetingsApi.getMetrics(meeting.id).then(setMetrics).catch(() => {});
   }, [meeting.id]);
 
+  const downloadMinutes = async () => {
+    setDownloading(true);
+    try {
+      const blob = await meetingsApi.downloadMinutes(meeting.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = meeting.minutesFileName ?? 'meeting-minutes';
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally { setDownloading(false); }
+  };
+
   if (!metrics) {
-    return <p className="text-sm text-gray-400 text-center py-10">회의록 데이터가 없습니다</p>;
+    return <p className="text-sm text-gray-400 text-center py-10">회의 요약 데이터가 없습니다</p>;
   }
 
   const done = metrics.checklists.filter(c => c.isDone).length;
@@ -270,6 +320,22 @@ function MetricsTab({ meeting }: { meeting: Meeting }) {
         </div>
       )}
 
+      {meeting.minutesFileName && (
+        <div className="bg-white border border-gray-200 rounded p-4">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">업로드된 회의록</h3>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-gray-700 truncate">{meeting.minutesFileName}</span>
+            <button
+              onClick={downloadMinutes}
+              disabled={downloading}
+              className="ml-auto shrink-0 border border-orange-400 text-orange-600 px-3 py-1.5 rounded text-sm hover:bg-orange-50 transition disabled:opacity-50 cursor-pointer"
+            >
+              {downloading ? '다운로드 중...' : '다운로드'}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white border border-gray-200 rounded p-4">
         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">체크리스트 결과</h3>
         <div className="space-y-1.5">
@@ -278,7 +344,7 @@ function MetricsTab({ meeting }: { meeting: Meeting }) {
               <span className={`w-4 h-4 border flex items-center justify-center shrink-0 rounded-sm text-xs ${item.isDone ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-300 text-transparent'}`}>
                 ✓
               </span>
-              <span className={item.isDone ? 'text-gray-700' : 'text-gray-400 line-through'}>{item.content}</span>
+              <span className={item.isDone ? 'line-through text-gray-400' : 'text-gray-700'}>{item.content}</span>
             </div>
           ))}
         </div>
@@ -291,8 +357,8 @@ function MetricsTab({ meeting }: { meeting: Meeting }) {
 const TABS: { key: Tab; label: string; onlyCompleted?: boolean }[] = [
   { key: 'overview', label: '개요' },
   { key: 'checklist', label: '체크리스트' },
-  { key: 'stt', label: 'STT' },
-  { key: 'metrics', label: '회의록', onlyCompleted: true },
+  { key: 'minutes', label: '회의록 업로드' },
+  { key: 'metrics', label: '회의 요약', onlyCompleted: true },
 ];
 
 export default function MeetingDetailPage() {
@@ -430,9 +496,9 @@ export default function MeetingDetailPage() {
         ))}
       </div>
 
-      {tab === 'overview' && <OverviewTab meeting={meeting} />}
+      {tab === 'overview' && <OverviewTab meeting={meeting} onMeetingChange={setMeeting} />}
       {tab === 'checklist' && <ChecklistTab meeting={meeting} />}
-      {tab === 'stt' && <SttTab meeting={meeting} />}
+      {tab === 'minutes' && <MinutesUploadTab meeting={meeting} onMeetingChange={setMeeting} />}
       {tab === 'metrics' && meeting.status === 'COMPLETED' && <MetricsTab meeting={meeting} />}
     </div>
   );

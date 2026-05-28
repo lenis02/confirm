@@ -21,22 +21,33 @@ export const meetingsApi = {
     client.get<MeetingChecklist[]>(`/meetings/${meetingId}/checklists`).then(r => r.data),
 
   updateChecklists: (meetingId: string, items: { id?: string; content: string; isDone?: boolean; order?: number }[]) =>
-    client.patch<MeetingChecklist[]>(`/meetings/${meetingId}/checklists`, { items }).then(r => r.data),
+    client.patch<MeetingChecklist[]>(`/meetings/${meetingId}/checklists`, {
+      // 백엔드 DTO 화이트리스트 필드만 전송 (엔티티 여분 필드 meetingId/createdAt 등은 forbidNonWhitelisted로 400 유발)
+      items: items.map((i, idx) => ({
+        ...(i.id ? { id: i.id } : {}), // 빈 id는 생략 (신규 항목 @IsUUID 통과)
+        content: i.content,
+        isDone: i.isDone ?? false,
+        order: i.order ?? idx,
+      })),
+    }).then(r => r.data),
 
   getBriefing: (meetingId: string) =>
     client.get<MeetingBriefing>(`/meetings/${meetingId}/briefing`).then(r => r.data),
 
-  uploadStt: (meetingId: string, file: File) => {
+  uploadMinutes: (meetingId: string, file: File) => {
     const form = new FormData();
     form.append('file', file);
-    return client.post(`/meetings/${meetingId}/stt`, form).then(r => r.data);
+    return client.post<Meeting>(`/meetings/${meetingId}/minutes`, form).then(r => r.data);
   },
 
-  getTranscript: (meetingId: string) =>
-    client.get<{ transcript: string; status: string }>(`/meetings/${meetingId}/transcript`).then(r => r.data),
+  downloadMinutes: (meetingId: string) =>
+    client.get<Blob>(`/meetings/${meetingId}/minutes`, { responseType: 'blob' }).then(r => r.data),
 
   complete: (meetingId: string) =>
     client.post<Meeting>(`/meetings/${meetingId}/completion`).then(r => r.data),
+
+  reopen: (meetingId: string) =>
+    client.post<Meeting>(`/meetings/${meetingId}/reopen`).then(r => r.data),
 
   getMetrics: (meetingId: string) =>
     client.get<MeetingMetrics>(`/meetings/${meetingId}/metrics`).then(r => r.data),
