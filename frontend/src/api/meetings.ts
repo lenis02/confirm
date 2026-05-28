@@ -21,7 +21,15 @@ export const meetingsApi = {
     client.get<MeetingChecklist[]>(`/meetings/${meetingId}/checklists`).then(r => r.data),
 
   updateChecklists: (meetingId: string, items: { id?: string; content: string; isDone?: boolean; order?: number }[]) =>
-    client.patch<MeetingChecklist[]>(`/meetings/${meetingId}/checklists`, { items }).then(r => r.data),
+    client.patch<MeetingChecklist[]>(`/meetings/${meetingId}/checklists`, {
+      // 백엔드 DTO 화이트리스트 필드만 전송 (엔티티 여분 필드 meetingId/createdAt 등은 forbidNonWhitelisted로 400 유발)
+      items: items.map((i, idx) => ({
+        ...(i.id ? { id: i.id } : {}), // 빈 id는 생략 (신규 항목 @IsUUID 통과)
+        content: i.content,
+        isDone: i.isDone ?? false,
+        order: i.order ?? idx,
+      })),
+    }).then(r => r.data),
 
   getBriefing: (meetingId: string) =>
     client.get<MeetingBriefing>(`/meetings/${meetingId}/briefing`).then(r => r.data),

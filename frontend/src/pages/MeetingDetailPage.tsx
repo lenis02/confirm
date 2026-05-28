@@ -54,7 +54,7 @@ function OverviewTab({ meeting }: { meeting: Meeting }) {
           <span className={`inline-flex w-fit text-xs px-1.5 py-0.5 border rounded ${STATUS_LABEL[meeting.status].cls}`}>
             {STATUS_LABEL[meeting.status].label}
           </span>
-          {meeting.achievementRate !== undefined && (
+          {meeting.achievementRate != null && (
             <>
               <span className="text-gray-400">체크리스트 달성률</span>
               <span className="text-gray-800 font-medium">{meeting.achievementRate}%</span>
