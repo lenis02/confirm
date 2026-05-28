@@ -23,6 +23,8 @@ import { Meeting, MeetingStatus, MeetingType, SttStatus } from './entities/meeti
 
 const MEETING_DURATION_MS = 60 * 60 * 1000; // 캘린더 일정 기본 길이 1시간
 
+const ALLOWED_MINUTES_EXT = ['hwp', 'doc', 'docx', 'pdf']; // 회의록 업로드 허용 확장자
+
 const DEFAULT_CHECKLISTS: Record<MeetingType, string[]> = {
   [MeetingType.KICKOFF]: [
     '프로젝트 목표 및 범위 공유',
@@ -213,27 +215,83 @@ export class MeetingsService {
     };
   }
 
-  async uploadStt(userId: string, meetingId: string): Promise<Meeting> {
-    const meeting = await this.findOne(userId, meetingId);
+  // STT 기능 보류 — 회의록 직접 업로드(uploadMinutes)로 대체됨. 추후 재사용 위해 주석 보존.
+  // async uploadStt(userId: string, meetingId: string): Promise<Meeting> {
+  //   const meeting = await this.findOne(userId, meetingId);
+  //
+  //   if (meeting.status === MeetingStatus.COMPLETED) {
+  //     throw new BadRequestException('완료된 회의에는 녹음 파일을 업로드할 수 없습니다.');
+  //   }
+  //
+  //   meeting.sttStatus = SttStatus.PENDING;
+  //   if (meeting.status === MeetingStatus.SCHEDULED) {
+  //     meeting.status = MeetingStatus.IN_PROGRESS;
+  //   }
+  //   return this.meetingRepo.save(meeting);
+  // }
+  //
+  // async getTranscript(userId: string, meetingId: string): Promise<{ transcript: string }> {
+  //   const meeting = await this.findOne(userId, meetingId);
+  //
+  //   if (meeting.sttStatus !== SttStatus.COMPLETED) {
+  //     throw new BadRequestException('STT 변환이 완료되지 않았습니다.');
+  //   }
+  //   return { transcript: meeting.transcript };
+  // }
 
-    if (meeting.status === MeetingStatus.COMPLETED) {
-      throw new BadRequestException('완료된 회의에는 녹음 파일을 업로드할 수 없습니다.');
+  async uploadMinutes(
+    userId: string,
+    meetingId: string,
+    file: Express.Multer.File,
+  ): Promise<Meeting> {
+    await this.findOne(userId, meetingId); // 접근 권한 확인
+
+    if (!file) throw new BadRequestException('업로드할 파일이 없습니다.');
+
+    // multipart 파일명은 multer가 latin1로 디코딩하므로 UTF-8로 복원 (한글 깨짐 방지)
+    const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    const ext = originalName.split('.').pop()?.toLowerCase() ?? '';
+    if (!ALLOWED_MINUTES_EXT.includes(ext)) {
+      throw new BadRequestException('hwp, doc, docx, pdf 파일만 업로드할 수 있습니다.');
     }
 
-    meeting.sttStatus = SttStatus.PENDING;
-    if (meeting.status === MeetingStatus.SCHEDULED) {
-      meeting.status = MeetingStatus.IN_PROGRESS;
-    }
-    return this.meetingRepo.save(meeting);
+    // update 사용: findOne으로 로드한 checklists 관계가 cascade 재저장되는 것을 방지
+    await this.meetingRepo.update(meetingId, {
+      minutesFileName: originalName,
+      minutesMimeType: file.mimetype,
+      minutesFileSize: file.size,
+      minutesContent: file.buffer,
+    });
+
+    return this.findOne(userId, meetingId);
   }
 
-  async getTranscript(userId: string, meetingId: string): Promise<{ transcript: string }> {
-    const meeting = await this.findOne(userId, meetingId);
+  async downloadMinutes(
+    userId: string,
+    meetingId: string,
+  ): Promise<{ fileName: string; mimeType: string; content: Buffer }> {
+    const meeting = await this.findOne(userId, meetingId); // 접근 권한 확인
 
-    if (meeting.sttStatus !== SttStatus.COMPLETED) {
-      throw new BadRequestException('STT 변환이 완료되지 않았습니다.');
+    if (!meeting.minutesFileName) {
+      throw new NotFoundException('업로드된 회의록이 없습니다.');
     }
-    return { transcript: meeting.transcript };
+
+    // minutesContent는 select:false라 명시적으로 다시 조회
+    const row = await this.meetingRepo
+      .createQueryBuilder('m')
+      .addSelect('m.minutesContent')
+      .where('m.id = :id', { id: meetingId })
+      .getOne();
+
+    if (!row?.minutesContent) {
+      throw new NotFoundException('업로드된 회의록이 없습니다.');
+    }
+
+    return {
+      fileName: meeting.minutesFileName,
+      mimeType: meeting.minutesMimeType ?? 'application/octet-stream',
+      content: row.minutesContent,
+    };
   }
 
   async completeMeeting(userId: string, meetingId: string): Promise<Meeting> {
@@ -265,6 +323,26 @@ export class MeetingsService {
     );
 
     return saved;
+  }
+
+  async reopenMeeting(userId: string, meetingId: string): Promise<Meeting> {
+    const meeting = await this.findOne(userId, meetingId);
+
+    if (meeting.status !== MeetingStatus.COMPLETED) {
+      throw new BadRequestException('완료된 회의만 진행 중으로 되돌릴 수 있습니다.');
+    }
+    await this.assertPm(userId, meeting.projectId);
+
+    // 완료 처리에서 이번 회의 미완료 체크리스트로 생성했던 Action Item 롤백 (이월 취소)
+    await this.actionItemsService.removeChecklistItemsForMeeting(meeting.id);
+
+    await this.meetingRepo.update(meetingId, {
+      status: MeetingStatus.IN_PROGRESS,
+      completedAt: null,
+      achievementRate: null,
+    });
+
+    return this.findOne(userId, meetingId);
   }
 
   async getMetrics(userId: string, meetingId: string): Promise<object> {

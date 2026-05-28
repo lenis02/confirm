@@ -97,6 +97,17 @@ export class ActionItemsService {
       .execute();
   }
 
+  // 회의 재오픈(완료→진행중) 시: 완료 처리에서 미완료 체크리스트로 자동 생성했던 Action Item 삭제.
+  // 체크리스트 파생 항목은 meetingId가 있고 dueDate가 없음(수동 생성은 dueDate 필수)으로 구분한다.
+  async removeChecklistItemsForMeeting(meetingId: string): Promise<void> {
+    await this.actionItemRepo
+      .createQueryBuilder()
+      .delete()
+      .from(ActionItem)
+      .where('meeting_id = :meetingId AND due_date IS NULL', { meetingId })
+      .execute();
+  }
+
   async findCarriedOver(projectId: string): Promise<ActionItem[]> {
     return this.actionItemRepo.find({
       where: { projectId, isCarriedOver: true, status: ActionItemStatus.PENDING },

@@ -79,6 +79,7 @@ export interface Meeting {
   completedAt?: string;
   achievementRate?: number;
   summary?: string;
+  minutesFileName?: string;
   checklists?: MeetingChecklist[];
 }
 
