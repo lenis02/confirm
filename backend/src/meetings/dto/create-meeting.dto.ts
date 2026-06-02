@@ -1,4 +1,4 @@
-import { IsDateString, IsEnum, IsString, MinLength } from 'class-validator';
+import { IsArray, IsDateString, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
 import { MeetingType } from '../entities/meeting.entity';
 
 export class CreateMeetingDto {
@@ -11,4 +11,9 @@ export class CreateMeetingDto {
 
   @IsDateString()
   scheduledAt: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  departments?: string[];
 }

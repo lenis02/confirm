@@ -17,7 +17,7 @@ const DATE_ROW_H = 30;
 const DECISION_COLOR: BarColor = { bg: '#EDE9FE', text: '#5B21B6', border: '#A78BFA' };
 const DAY_MS = 86_400_000;
 
-type CalMeeting = Pick<Meeting, 'id' | 'title' | 'type' | 'scheduledAt'>;
+type CalMeeting = Pick<Meeting, 'id' | 'title' | 'type' | 'scheduledAt' | 'departments'>;
 
 type LaidBar = {
   key: string;
@@ -188,16 +188,28 @@ export default function WbsCalendar({
                     {/* WBS 막대 영역 확보 */}
                     <div style={{ height: bandH }} />
                     <div className="space-y-0.5 mt-1">
-                      {dayMeetings.slice(0, 2).map(m => (
-                        <button
-                          key={m.id}
-                          onClick={() => onMeetingClick?.(m.id)}
-                          className="w-full text-left text-[11px] bg-brand-50 text-brand-700 border border-brand-100 px-1.5 py-0.5 truncate rounded-md hover:bg-brand-100 transition cursor-pointer"
-                          title={m.title}
-                        >
-                          {MEETING_TYPE_LABEL[m.type]} {m.title}
-                        </button>
-                      ))}
+                      {dayMeetings.slice(0, 2).map(m => {
+                        const deptColors = (m.departments ?? [])
+                          .map(d => roleColor.get(d))
+                          .filter((c): c is BarColor => !!c);
+                        return (
+                          <button
+                            key={m.id}
+                            onClick={() => onMeetingClick?.(m.id)}
+                            className="w-full flex items-center gap-1 text-left text-[11px] px-1.5 py-0.5 rounded-md border bg-[#EFF6FF] text-[#1D4ED8] border-[#DBEAFE] hover:opacity-80 transition cursor-pointer"
+                            title={m.departments?.length ? `[${m.departments.join(', ')}] ${m.title}` : m.title}
+                          >
+                            {deptColors.length > 0 && (
+                              <span className="flex items-center gap-0.5 shrink-0">
+                                {deptColors.map((c, di) => (
+                                  <span key={di} className="w-2 h-2 rounded-sm" style={{ backgroundColor: c.bg, border: `1px solid ${c.border}` }} />
+                                ))}
+                              </span>
+                            )}
+                            <span className="truncate">{MEETING_TYPE_LABEL[m.type]} {m.title}</span>
+                          </button>
+                        );
+                      })}
                       {dayMeetings.length > 2 && (
                         <div className="text-[10px] text-works-subtle px-1">+{dayMeetings.length - 2}</div>
                       )}

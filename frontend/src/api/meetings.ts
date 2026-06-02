@@ -5,7 +5,7 @@ export const meetingsApi = {
   list: (projectId: string, status?: string) =>
     client.get<Meeting[]>(`/projects/${projectId}/meetings`, { params: status ? { status } : {} }).then(r => r.data),
 
-  create: (projectId: string, data: { title: string; type: string; scheduledAt: string }) =>
+  create: (projectId: string, data: { title: string; type: string; scheduledAt: string; departments?: string[] }) =>
     client.post<Meeting>(`/projects/${projectId}/meetings`, data).then(r => r.data),
 
   get: (meetingId: string) =>

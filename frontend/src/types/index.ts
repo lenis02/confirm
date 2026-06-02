@@ -75,6 +75,7 @@ export interface Meeting {
   title: string;
   type: 'KICKOFF' | 'PROGRESS_CHECK' | 'ISSUE_CHECK' | 'CONSENSUS';
   status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED';
+  departments?: string[] | null;
   scheduledAt: string;
   completedAt?: string;
   achievementRate?: number;

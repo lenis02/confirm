@@ -4,7 +4,6 @@ import AppLayout from './components/layout/AppLayout';
 import Spinner from './components/ui/Spinner';
 import LoginPage from './pages/LoginPage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
-import DashboardPage from './pages/DashboardPage';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
 import MeetingDetailPage from './pages/MeetingDetailPage';
@@ -37,7 +36,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<PublicOnlyRoute><LoginPage /></PublicOnlyRoute>} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
-          <Route path="/" element={<PrivateRoute><AppLayout><DashboardPage /></AppLayout></PrivateRoute>} />
+          <Route path="/" element={<Navigate to="/projects" replace />} />
           <Route path="/projects" element={<PrivateRoute><AppLayout><ProjectsPage /></AppLayout></PrivateRoute>} />
           <Route path="/projects/:id" element={<PrivateRoute><AppLayout><ProjectDetailPage /></AppLayout></PrivateRoute>} />
           <Route path="/meetings/:id" element={<PrivateRoute><AppLayout><MeetingDetailPage /></AppLayout></PrivateRoute>} />

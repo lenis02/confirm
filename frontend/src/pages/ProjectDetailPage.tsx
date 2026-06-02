@@ -7,6 +7,7 @@ import Spinner from '../components/ui/Spinner';
 import type { Project, Document, ProjectWbs, WbsItem, Meeting, ActionItem } from '../types';
 import WbsGanttChart, { ROLE_BAR_PALETTE } from '../components/WbsGanttChart';
 import WbsCalendar from '../components/WbsCalendar';
+import WbsItemEditModal from '../components/WbsItemEditModal';
 
 type Tab = 'overview' | 'wbs' | 'meetings' | 'members' | 'actions';
 
@@ -65,8 +66,6 @@ function WbsTab({ project }: { project: Project }) {
   const [dragging, setDragging] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [modalItem, setModalItem] = useState<WbsItem | null>(null);
-  const [itemForm, setItemForm] = useState({ title: '', assignedRole: '', durationDays: 0, startDate: '', endDate: '', isDecisionPoint: false });
-  const [savingItem, setSavingItem] = useState(false);
   const [sortKey, setSortKey] = useState<WbsSortKey>('id');
   const [sortAsc, setSortAsc] = useState(true);
   const [viewMode, setViewMode] = useState<'table' | 'chart' | 'member'>('table');
@@ -136,13 +135,6 @@ function WbsTab({ project }: { project: Project }) {
     setWbs(prev => prev ? { ...prev, items: prev.items.map(i => i.id === itemId ? updated : i) } : prev);
   };
 
-  const removeItem = async (item: WbsItem) => {
-    if (!window.confirm(`'${item.title}' 항목을 삭제하시겠습니까?`)) return;
-    await projectsApi.deleteWbsItem(projectId, item.id);
-    setModalItem(null);
-    await loadWbs(); // 삭제 후 재정렬된 ID 반영을 위해 다시 로드
-  };
-
   const removeWbs = async () => {
     if (!window.confirm('WBS 전체를 삭제하시겠습니까? 모든 태스크가 함께 삭제됩니다.')) return;
     await projectsApi.deleteWbs(projectId);
@@ -150,28 +142,13 @@ function WbsTab({ project }: { project: Project }) {
     setWbsError(false);
   };
 
-  const openItemModal = (item: WbsItem) => {
-    setModalItem(item);
-    setItemForm({
-      title: item.title,
-      assignedRole: item.assignedRole ?? '',
-      durationDays: item.durationDays ?? 0,
-      startDate: (item.startDate ?? '').slice(0, 10),
-      endDate: (item.endDate ?? '').slice(0, 10),
-      isDecisionPoint: item.isDecisionPoint,
-    });
-  };
+  const openItemModal = (item: WbsItem) => setModalItem(item);
 
-  const saveItem = async () => {
-    if (!modalItem) return;
-    setSavingItem(true);
-    try {
-      const updated = await projectsApi.updateWbsItem(projectId, modalItem.id, itemForm);
-      setWbs(prev => prev ? { ...prev, items: prev.items.map(i => i.id === updated.id ? updated : i) } : prev);
-      setModalItem(null);
-    } finally {
-      setSavingItem(false);
-    }
+  const removeItem = async (item: WbsItem) => {
+    if (!window.confirm(`'${item.title}' 항목을 삭제하시겠습니까?`)) return;
+    await projectsApi.deleteWbsItem(projectId, item.id);
+    setModalItem(null);
+    await loadWbs(); // 삭제 후 재정렬된 ID 반영을 위해 다시 로드
   };
 
   const isProcessing = docs.some(d => d.status === 'PENDING' || d.status === 'IN_PROGRESS');
@@ -376,82 +353,19 @@ function WbsTab({ project }: { project: Project }) {
       )}
 
       {modalItem && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
-          onClick={() => setModalItem(null)}>
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-5 space-y-3"
-            onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-800">태스크 상세</h3>
-              <span className="text-xs text-gray-400 font-mono">
-                {modalItem.taskId ?? `T${String(modalItem.order).padStart(2, '0')}`}
-              </span>
-            </div>
-
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">태스크명</label>
-              <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-300"
-                value={itemForm.title} onChange={e => setItemForm(f => ({ ...f, title: e.target.value }))} />
-            </div>
-
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <label className="block text-xs text-gray-500 mb-1">부서</label>
-                <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-300"
-                  value={itemForm.assignedRole} onChange={e => setItemForm(f => ({ ...f, assignedRole: e.target.value }))} />
-              </div>
-              <div className="w-24">
-                <label className="block text-xs text-gray-500 mb-1">기간(일)</label>
-                <input type="number" min={0} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-300"
-                  value={itemForm.durationDays} onChange={e => setItemForm(f => ({ ...f, durationDays: Number(e.target.value) }))} />
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <label className="block text-xs text-gray-500 mb-1">시작일</label>
-                <input type="date" className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-300"
-                  value={itemForm.startDate} onChange={e => setItemForm(f => ({ ...f, startDate: e.target.value }))} />
-              </div>
-              <div className="flex-1">
-                <label className="block text-xs text-gray-500 mb-1">종료일</label>
-                <input type="date" className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-300"
-                  value={itemForm.endDate} onChange={e => setItemForm(f => ({ ...f, endDate: e.target.value }))} />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                <input type="checkbox" className="accent-brand-500 cursor-pointer"
-                  checked={itemForm.isDecisionPoint}
-                  onChange={e => setItemForm(f => ({ ...f, isDecisionPoint: e.target.checked }))} />
-                확인
-              </label>
-              {modalItem.complexity && (
-                <span className="text-xs text-gray-500">
-                  복잡도 <span className={`px-1.5 py-0.5 border rounded ${COMPLEXITY_COLOR[modalItem.complexity] ?? 'bg-gray-50 text-gray-500 border-gray-200'}`}>{modalItem.complexity}</span>
-                </span>
-              )}
-            </div>
-
-            {modalItem.reasoning && (
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">근거</label>
-                <p className="text-xs text-gray-600 bg-gray-50 border border-gray-100 rounded px-3 py-2">{modalItem.reasoning}</p>
-              </div>
-            )}
-
-            <div className="flex gap-2 pt-1">
-              <button onClick={() => modalItem && removeItem(modalItem)}
-                className="border border-red-200 text-red-500 rounded py-2 px-3 text-sm hover:bg-red-50 transition cursor-pointer">삭제</button>
-              <button onClick={() => setModalItem(null)}
-                className="flex-1 border border-gray-300 rounded py-2 text-sm text-gray-600 hover:bg-gray-50 transition cursor-pointer">취소</button>
-              <button onClick={saveItem} disabled={savingItem}
-                className="flex-1 bg-brand-500 text-white rounded py-2 text-sm hover:bg-brand-600 transition disabled:opacity-50 cursor-pointer">
-                {savingItem ? '저장 중...' : '저장'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <WbsItemEditModal
+          projectId={projectId}
+          item={modalItem}
+          onClose={() => setModalItem(null)}
+          onSaved={updated => {
+            setWbs(prev => prev ? { ...prev, items: prev.items.map(i => i.id === updated.id ? updated : i) } : prev);
+            setModalItem(null);
+          }}
+          onDeleted={() => {
+            setModalItem(null);
+            loadWbs(); // 삭제 후 재정렬된 ID 반영을 위해 다시 로드
+          }}
+        />
       )}
     </div>
   );
@@ -582,19 +496,19 @@ function TeamResourcesPanel({
           {rows.map((r, i) => (
             <div key={i} className="flex items-center gap-2">
               <input
-                className="input-field !py-2 flex-1"
+                className="input-field !py-2 flex-[4] min-w-0"
                 placeholder="부서"
                 value={r.department}
                 onChange={e => updateRow(i, 'department', e.target.value)}
               />
               <input
-                className="input-field !py-2 flex-1"
+                className="input-field !py-2 flex-[9] min-w-0"
                 placeholder="역할"
                 value={r.role}
                 onChange={e => updateRow(i, 'role', e.target.value)}
               />
               <input
-                className="input-field !py-2 w-28"
+                className="input-field !py-2 w-44 shrink-0"
                 placeholder="경력/직급"
                 value={r.experience_level}
                 onChange={e => updateRow(i, 'experience_level', e.target.value)}
@@ -616,21 +530,21 @@ function TeamResourcesPanel({
       {/* 추가 입력 폼 */}
       <div className="flex items-center gap-2 pt-1">
         <input
-          className="input-field !py-2 flex-1"
+          className="input-field !py-2 flex-[4] min-w-0"
           placeholder="부서 (예: 개발)"
           value={draft.department}
           onChange={e => setDraft(d => ({ ...d, department: e.target.value }))}
           onKeyDown={e => { if (e.key === 'Enter') addRow(); }}
         />
         <input
-          className="input-field !py-2 flex-1"
+          className="input-field !py-2 flex-[9] min-w-0"
           placeholder="역할 (예: 백엔드)"
           value={draft.role}
           onChange={e => setDraft(d => ({ ...d, role: e.target.value }))}
           onKeyDown={e => { if (e.key === 'Enter') addRow(); }}
         />
         <input
-          className="input-field !py-2 w-32"
+          className="input-field !py-2 w-44 shrink-0"
           placeholder="경력/직급"
           value={draft.experience_level}
           onChange={e => setDraft(d => ({ ...d, experience_level: e.target.value }))}
@@ -651,18 +565,41 @@ function TeamResourcesPanel({
 // ── 회의 탭 ───────────────────────────────────────────────────────────────────
 function MeetingsTab({ projectId }: { projectId: string }) {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [departments, setDepartments] = useState<string[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<Meeting | null>(null);
-  const [form, setForm] = useState({ title: '', type: 'KICKOFF', scheduledAt: '' });
+  const [form, setForm] = useState<{ title: string; type: string; scheduledAt: string; departments: string[] }>({ title: '', type: 'KICKOFF', scheduledAt: '', departments: [] });
   const [editForm, setEditForm] = useState({ title: '', scheduledAt: '' });
   const [loading, setLoading] = useState(false);
 
   const load = () => meetingsApi.list(projectId).then(setMeetings);
-  useEffect(() => { load(); }, [projectId]);
+  useEffect(() => {
+    load();
+    projectsApi.getWbs(projectId)
+      .then(w => setDepartments(Array.from(new Set((w.items ?? []).map(i => i.assignedRole).filter((r): r is string => !!r)))))
+      .catch(() => setDepartments([]));
+  }, [projectId]);
+
+  const toggleDept = (dept: string) =>
+    setForm(f => ({
+      ...f,
+      departments: f.departments.includes(dept)
+        ? f.departments.filter(d => d !== dept)
+        : [...f.departments, dept],
+    }));
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true);
-    try { await meetingsApi.create(projectId, form); await load(); setShowForm(false); setForm({ title: '', type: 'KICKOFF', scheduledAt: '' }); }
+    try {
+      await meetingsApi.create(projectId, { ...form, departments: form.departments });
+      await load();
+      setShowForm(false);
+      setForm({ title: '', type: 'KICKOFF', scheduledAt: '', departments: [] });
+    }
+    catch (err) {
+      const msg = err instanceof Error ? err.message : '회의 생성에 실패했습니다.';
+      alert(`회의 생성 실패: ${msg}`);
+    }
     finally { setLoading(false); }
   };
 
@@ -705,6 +642,28 @@ function MeetingsTab({ projectId }: { projectId: string }) {
             <input type="datetime-local" className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-brand-300"
               required value={form.scheduledAt} onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))} />
           </div>
+          {departments.length > 0 && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1.5">관련 부서 (복수 선택 가능)</p>
+              <div className="flex flex-wrap gap-1.5">
+                {departments.map((d, i) => {
+                  const c = ROLE_BAR_PALETTE[i % ROLE_BAR_PALETTE.length];
+                  const active = form.departments.includes(d);
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => toggleDept(d)}
+                      className={`text-xs px-2 py-1 rounded-md border transition cursor-pointer ${active ? '' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                      style={active ? { backgroundColor: c.bg, color: c.text, borderColor: c.border } : undefined}
+                    >
+                      {active ? '✓ ' : ''}{d}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="flex gap-2">
             <button type="button" onClick={() => setShowForm(false)}
               className="flex-1 border border-gray-300 rounded py-2 text-sm text-gray-600 hover:bg-white transition cursor-pointer">취소</button>
@@ -745,6 +704,15 @@ function MeetingsTab({ projectId }: { projectId: string }) {
                 <span className={`text-xs px-1.5 py-0.5 border rounded ${MEETING_TYPE_COLOR[m.type]}`}>
                   {MEETING_TYPE_LABEL[m.type]}
                 </span>
+                {m.departments?.map(dep => {
+                  const idx = departments.indexOf(dep);
+                  const c = ROLE_BAR_PALETTE[(idx < 0 ? 0 : idx) % ROLE_BAR_PALETTE.length];
+                  return (
+                    <span key={dep} className="text-xs px-1.5 py-0.5 border rounded" style={{ backgroundColor: c.bg, color: c.text, borderColor: c.border }}>
+                      {dep}
+                    </span>
+                  );
+                })}
                 <Link to={`/meetings/${m.id}`} className="flex-1 text-sm font-medium text-gray-800 truncate hover:text-brand-600 transition cursor-pointer">
                   {m.title}
                 </Link>
@@ -953,6 +921,7 @@ function OverviewTab({ project, onNavigate }: { project: Project; onNavigate: (t
   const [wbs, setWbs] = useState<ProjectWbs | null>(null);
   const [wbsLoading, setWbsLoading] = useState(true);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [modalItem, setModalItem] = useState<WbsItem | null>(null);
 
   useEffect(() => {
     setWbsLoading(true);
@@ -1008,7 +977,7 @@ function OverviewTab({ project, onNavigate }: { project: Project; onNavigate: (t
           <WbsCalendar
             items={wbs?.items ?? []}
             meetings={meetings}
-            onItemClick={() => onNavigate('wbs')}
+            onItemClick={item => setModalItem(item)}
             onMeetingClick={id => navigate(`/meetings/${id}`)}
           />
         )}
@@ -1041,6 +1010,22 @@ function OverviewTab({ project, onNavigate }: { project: Project; onNavigate: (t
           </div>
         )}
       </div>
+
+      {modalItem && (
+        <WbsItemEditModal
+          projectId={project.id}
+          item={modalItem}
+          onClose={() => setModalItem(null)}
+          onSaved={updated => {
+            setWbs(prev => prev ? { ...prev, items: prev.items.map(i => i.id === updated.id ? updated : i) } : prev);
+            setModalItem(null);
+          }}
+          onDeleted={deletedId => {
+            setWbs(prev => prev ? { ...prev, items: prev.items.filter(i => i.id !== deletedId) } : prev);
+            setModalItem(null);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -50,6 +50,10 @@ export class Meeting {
   @Column({ type: 'enum', enum: MeetingType })
   type: MeetingType;
 
+  // 회의가 연관된 부서(WBS assignedRole) 목록. 캘린더 색상 표시에 사용
+  @Column({ type: 'jsonb', nullable: true })
+  departments: string[] | null;
+
   @Column({ type: 'enum', enum: MeetingStatus, default: MeetingStatus.SCHEDULED })
   status: MeetingStatus;
 
