@@ -21,7 +21,7 @@ export const projectsApi = {
   getMembers: (projectId: string) =>
     client.get<ProjectMember[]>(`/projects/${projectId}/members`).then(r => r.data),
 
-  addMember: (projectId: string, data: { userId: string; role: string }) =>
+  addMember: (projectId: string, data: { email: string; role: string }) =>
     client.post<ProjectMember>(`/projects/${projectId}/members`, data).then(r => r.data),
 
   updateMember: (projectId: string, memberId: string, data: { role: string }) =>

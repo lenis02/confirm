@@ -12,6 +12,7 @@ import { UpdateMemberDto } from './dto/update-member.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { MemberRole, ProjectMember } from './entities/project-member.entity';
 import { Project, ProjectStatus } from './entities/project.entity';
+import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class ProjectsService {
@@ -20,6 +21,8 @@ export class ProjectsService {
     private readonly projectRepo: Repository<Project>,
     @InjectRepository(ProjectMember)
     private readonly memberRepo: Repository<ProjectMember>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
   ) {}
 
   async create(userId: string, dto: CreateProjectDto): Promise<Project> {
@@ -98,12 +101,25 @@ export class ProjectsService {
     const project = await this.findOne(userId, projectId);
     this.assertPm(project, userId);
 
+    const invitee = await this.userRepo.findOne({
+      where: { email: dto.email },
+    });
+    if (!invitee) {
+      throw new NotFoundException(
+        '해당 이메일로 가입된 사용자가 없습니다. 초대 대상자가 먼저 구글 로그인을 한 번 해야 합니다.',
+      );
+    }
+
     const exists = await this.memberRepo.findOne({
-      where: { projectId, userId: dto.userId },
+      where: { projectId, userId: invitee.id },
     });
     if (exists) throw new ConflictException('이미 프로젝트 멤버입니다.');
 
-    const member = this.memberRepo.create({ projectId, ...dto });
+    const member = this.memberRepo.create({
+      projectId,
+      userId: invitee.id,
+      role: dto.role,
+    });
     const saved = await this.memberRepo.save(member);
     return this.memberRepo.findOne({ where: { id: saved.id }, relations: ['user'] }) as Promise<ProjectMember>;
   }

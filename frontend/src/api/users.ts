@@ -7,4 +7,7 @@ export const usersApi = {
 
   updateMe: (data: { name?: string; jobTitle?: string }) =>
     client.patch<User>('/users/me', data).then(r => r.data),
+
+  search: (email: string) =>
+    client.get<User[]>('/users/search', { params: { email } }).then(r => r.data),
 };

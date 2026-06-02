@@ -3,8 +3,9 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { projectsApi } from '../api/projects';
 import { meetingsApi } from '../api/meetings';
 import { actionItemsApi } from '../api/actionItems';
+import { usersApi } from '../api/users';
 import Spinner from '../components/ui/Spinner';
-import type { Project, Document, ProjectWbs, WbsItem, Meeting, ActionItem } from '../types';
+import type { Project, Document, ProjectWbs, WbsItem, Meeting, ActionItem, User } from '../types';
 import WbsGanttChart, { ROLE_BAR_PALETTE } from '../components/WbsGanttChart';
 import WbsCalendar from '../components/WbsCalendar';
 import WbsItemEditModal from '../components/WbsItemEditModal';
@@ -741,15 +742,49 @@ function MeetingsTab({ projectId }: { projectId: string }) {
 // ── 팀원 탭 ───────────────────────────────────────────────────────────────────
 function MembersTab({ project, onReload }: { project: Project; onReload: () => void }) {
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ userId: '', role: 'DEVELOPER' });
+  const [role, setRole] = useState('DEVELOPER');
+  const [keyword, setKeyword] = useState('');
+  const [results, setResults] = useState<User[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selected, setSelected] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editRole, setEditRole] = useState('');
 
+  const memberUserIds = new Set(project.members.map(m => m.userId));
+
+  // 이메일 입력 → 디바운스 후 가입 유저 검색
+  useEffect(() => {
+    const q = keyword.trim();
+    if (!q || selected) { setResults([]); return; }
+    setSearching(true);
+    const t = setTimeout(() => {
+      usersApi.search(q)
+        .then(setResults)
+        .catch(() => setResults([]))
+        .finally(() => setSearching(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [keyword, selected]);
+
+  const resetForm = () => {
+    setShowForm(false); setKeyword(''); setResults([]); setSelected(null);
+    setRole('DEVELOPER'); setError('');
+  };
+
   const addMember = async (e: React.FormEvent) => {
-    e.preventDefault(); setLoading(true);
-    try { await projectsApi.addMember(project.id, form); onReload(); setShowForm(false); setForm({ userId: '', role: 'DEVELOPER' }); }
-    finally { setLoading(false); }
+    e.preventDefault();
+    if (!selected) { setError('초대할 사용자를 검색해서 선택해 주세요.'); return; }
+    setLoading(true); setError('');
+    try {
+      await projectsApi.addMember(project.id, { email: selected.email, role });
+      onReload();
+      resetForm();
+    } catch (err: unknown) {
+      const res = (err as { response?: { data?: { message?: string } } })?.response;
+      setError(res?.data?.message ?? '팀원 추가에 실패했습니다.');
+    } finally { setLoading(false); }
   };
 
   const updateRole = async (memberId: string) => {
@@ -767,7 +802,7 @@ function MembersTab({ project, onReload }: { project: Project; onReload: () => v
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <button onClick={() => setShowForm(!showForm)}
+        <button onClick={() => (showForm ? resetForm() : setShowForm(true))}
           className="border border-brand-300 text-brand-600 px-3 py-1.5 rounded text-sm hover:bg-brand-50 transition cursor-pointer">
           + 팀원 추가
         </button>
@@ -775,23 +810,60 @@ function MembersTab({ project, onReload }: { project: Project; onReload: () => v
 
       {showForm && (
         <form onSubmit={addMember} className="bg-gray-50 border border-gray-200 rounded p-4 space-y-3">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">사용자 ID <span className="text-red-400">*</span></label>
-            <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-brand-300"
-              placeholder="초대할 사용자 ID" required value={form.userId}
-              onChange={e => setForm(f => ({ ...f, userId: e.target.value }))} />
+          <div className="relative">
+            <label className="block text-xs text-gray-500 mb-1">이메일로 검색 <span className="text-red-400">*</span></label>
+            {selected ? (
+              <div className="w-full border border-brand-300 bg-brand-50 rounded px-3 py-2 text-sm flex items-center justify-between">
+                <span>
+                  <span className="font-medium text-gray-800">{selected.name}</span>
+                  <span className="text-gray-500 ml-2">{selected.email}</span>
+                </span>
+                <button type="button" onClick={() => { setSelected(null); setKeyword(''); }}
+                  className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer">변경</button>
+              </div>
+            ) : (
+              <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-brand-300"
+                placeholder="초대할 팀원의 이메일 (예: name@example.com)" value={keyword}
+                onChange={e => { setKeyword(e.target.value); setError(''); }} autoComplete="off" />
+            )}
+
+            {!selected && keyword.trim() && (
+              <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-gray-200 rounded shadow-sm max-h-56 overflow-auto">
+                {searching && <p className="px-3 py-2 text-xs text-gray-400">검색 중...</p>}
+                {!searching && results.length === 0 && (
+                  <p className="px-3 py-2 text-xs text-gray-400">
+                    가입된 사용자가 없습니다. 초대 대상자가 먼저 구글 로그인을 한 번 해야 합니다.
+                  </p>
+                )}
+                {!searching && results.map(u => {
+                  const already = memberUserIds.has(u.id);
+                  return (
+                    <button type="button" key={u.id} disabled={already}
+                      onClick={() => { setSelected(u); setResults([]); }}
+                      className={`w-full text-left px-3 py-2 flex items-center justify-between text-sm transition ${already ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer'}`}>
+                      <span>
+                        <span className="font-medium text-gray-800">{u.name}</span>
+                        <span className="text-gray-500 ml-2">{u.email}</span>
+                      </span>
+                      {already && <span className="text-xs text-gray-400">이미 멤버</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">역할</label>
             <select className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-brand-300 cursor-pointer"
-              value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+              value={role} onChange={e => setRole(e.target.value)}>
               {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
+          {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-2">
-            <button type="button" onClick={() => setShowForm(false)}
+            <button type="button" onClick={resetForm}
               className="flex-1 border border-gray-300 rounded py-2 text-sm text-gray-600 hover:bg-white transition cursor-pointer">취소</button>
-            <button type="submit" disabled={loading}
+            <button type="submit" disabled={loading || !selected}
               className="flex-1 bg-brand-500 text-white rounded py-2 text-sm hover:bg-brand-600 transition disabled:opacity-50 cursor-pointer">
               {loading ? '추가 중...' : '추가'}
             </button>

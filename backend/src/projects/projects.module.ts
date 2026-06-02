@@ -9,6 +9,7 @@ import { ProjectWbs } from './entities/project-wbs.entity';
 import { WbsItem } from './entities/wbs-item.entity';
 import { Meeting } from '../meetings/entities/meeting.entity';
 import { MeetingChecklist } from '../meetings/entities/meeting-checklist.entity';
+import { User } from '../users/entities/user.entity';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
 import { DocumentsService } from './documents.service';
@@ -24,6 +25,7 @@ import { WbsService } from './wbs.service';
       WbsItem,
       Meeting,
       MeetingChecklist,
+      User,
     ]),
     AuthModule,
     LlmModule,
