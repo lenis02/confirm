@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { meetingsApi } from '../api/meetings';
+import Spinner from '../components/ui/Spinner';
 import type { Meeting, MeetingChecklist, MeetingMetrics, MeetingBriefing } from '../types';
 
 type Tab = 'overview' | 'checklist' | 'minutes' | 'metrics';
@@ -10,13 +11,13 @@ const MEETING_TYPE_LABEL: Record<string, string> = {
 };
 const MEETING_TYPE_COLOR: Record<string, string> = {
   KICKOFF: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-  PROGRESS_CHECK: 'bg-orange-50 text-orange-600 border-orange-200',
+  PROGRESS_CHECK: 'bg-brand-50 text-brand-600 border-brand-100',
   ISSUE_CHECK: 'bg-red-50 text-red-600 border-red-200',
   CONSENSUS: 'bg-green-50 text-green-700 border-green-200',
 };
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   SCHEDULED: { label: '예정', cls: 'bg-gray-50 text-gray-500 border-gray-200' },
-  IN_PROGRESS: { label: '진행 중', cls: 'bg-orange-50 text-orange-600 border-orange-200' },
+  IN_PROGRESS: { label: '진행 중', cls: 'bg-brand-50 text-brand-600 border-brand-100' },
   COMPLETED: { label: '완료', cls: 'bg-green-50 text-green-700 border-green-200' },
 };
 
@@ -90,7 +91,7 @@ function OverviewTab({ meeting, onMeetingChange }: { meeting: Meeting; onMeeting
           <button
             onClick={complete}
             disabled={completing}
-            className="bg-orange-500 text-white px-4 py-2 rounded text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer"
+            className="bg-brand-500 text-white px-4 py-2 rounded text-sm hover:bg-brand-600 transition disabled:opacity-50 cursor-pointer"
           >
             {completing ? '처리 중...' : '회의 완료 처리'}
           </button>
@@ -163,7 +164,7 @@ function ChecklistTab({ meeting }: { meeting: Meeting }) {
               <button
                 onClick={() => toggle(item.id)}
                 disabled={!isEditable}
-                className={`w-4 h-4 border flex items-center justify-center shrink-0 transition rounded-sm ${item.isDone ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-300'} ${isEditable ? 'cursor-pointer hover:border-orange-400' : 'cursor-default'}`}
+                className={`w-4 h-4 border flex items-center justify-center shrink-0 transition rounded-sm ${item.isDone ? 'bg-brand-500 border-brand-500 text-white' : 'border-gray-300'} ${isEditable ? 'cursor-pointer hover:border-brand-300' : 'cursor-default'}`}
               >
                 {item.isDone && <span className="text-xs leading-none">✓</span>}
               </button>
@@ -184,14 +185,14 @@ function ChecklistTab({ meeting }: { meeting: Meeting }) {
       {isEditable && (
         <form onSubmit={addItem} className="flex gap-2">
           <input
-            className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+            className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-300"
             placeholder="항목 추가..."
             value={newContent}
             onChange={e => setNewContent(e.target.value)}
           />
           <button
             type="submit"
-            className="border border-orange-400 text-orange-600 px-3 py-2 rounded text-sm hover:bg-orange-50 transition cursor-pointer"
+            className="border border-brand-300 text-brand-600 px-3 py-2 rounded text-sm hover:bg-brand-50 transition cursor-pointer"
           >추가</button>
         </form>
       )}
@@ -243,7 +244,7 @@ function MinutesUploadTab({ meeting, onMeetingChange }: { meeting: Meeting; onMe
         onDrop={onDrop}
         onClick={() => fileRef.current?.click()}
         className={`border-2 border-dashed rounded p-8 text-center cursor-pointer transition ${
-          dragOver ? 'border-orange-400 bg-orange-50' : 'border-gray-200 bg-gray-50 hover:border-orange-300'
+          dragOver ? 'border-brand-300 bg-brand-50' : 'border-gray-200 bg-gray-50 hover:border-orange-300'
         }`}
       >
         <p className="text-sm text-gray-500 mb-1">회의록 파일을 여기로 드래그하거나 클릭해서 업로드</p>
@@ -252,7 +253,7 @@ function MinutesUploadTab({ meeting, onMeetingChange }: { meeting: Meeting; onMe
         <button
           type="button"
           disabled={uploading}
-          className="border border-orange-400 text-orange-600 px-4 py-1.5 rounded text-sm hover:bg-orange-50 transition disabled:opacity-50 cursor-pointer"
+          className="border border-brand-300 text-brand-600 px-4 py-1.5 rounded text-sm hover:bg-brand-50 transition disabled:opacity-50 cursor-pointer"
         >
           {uploading ? '업로드 중...' : '파일 선택'}
         </button>
@@ -302,7 +303,7 @@ function MetricsTab({ meeting }: { meeting: Meeting }) {
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-white border border-gray-200 rounded p-4 text-center">
           <p className="text-xs text-gray-400 mb-1">체크리스트 달성률</p>
-          <p className="text-3xl font-bold text-orange-500">{metrics.achievementRate}%</p>
+          <p className="text-3xl font-bold text-brand-500">{metrics.achievementRate}%</p>
           <p className="text-xs text-gray-400 mt-1">{done}/{metrics.checklists.length} 완료</p>
         </div>
         <div className="bg-white border border-gray-200 rounded p-4 text-center">
@@ -328,7 +329,7 @@ function MetricsTab({ meeting }: { meeting: Meeting }) {
             <button
               onClick={downloadMinutes}
               disabled={downloading}
-              className="ml-auto shrink-0 border border-orange-400 text-orange-600 px-3 py-1.5 rounded text-sm hover:bg-orange-50 transition disabled:opacity-50 cursor-pointer"
+              className="ml-auto shrink-0 border border-brand-300 text-brand-600 px-3 py-1.5 rounded text-sm hover:bg-brand-50 transition disabled:opacity-50 cursor-pointer"
             >
               {downloading ? '다운로드 중...' : '다운로드'}
             </button>
@@ -341,7 +342,7 @@ function MetricsTab({ meeting }: { meeting: Meeting }) {
         <div className="space-y-1.5">
           {metrics.checklists.map(item => (
             <div key={item.id} className="flex items-center gap-2 text-sm">
-              <span className={`w-4 h-4 border flex items-center justify-center shrink-0 rounded-sm text-xs ${item.isDone ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-300 text-transparent'}`}>
+              <span className={`w-4 h-4 border flex items-center justify-center shrink-0 rounded-sm text-xs ${item.isDone ? 'bg-brand-500 border-brand-500 text-white' : 'border-gray-300 text-transparent'}`}>
                 ✓
               </span>
               <span className={item.isDone ? 'line-through text-gray-400' : 'text-gray-700'}>{item.content}</span>
@@ -378,7 +379,7 @@ export default function MeetingDetailPage() {
   if (!meeting) {
     return (
       <div className="flex justify-center py-20">
-        <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+        <Spinner />
       </div>
     );
   }
@@ -414,10 +415,10 @@ export default function MeetingDetailPage() {
   const st = STATUS_LABEL[meeting.status];
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="page-shell max-w-3xl">
       {/* 헤더 */}
       <div className="mb-5">
-        <Link to={`/projects/${meeting.projectId}`} className="text-xs text-gray-400 hover:text-orange-500 transition cursor-pointer">
+        <Link to={`/projects/${meeting.projectId}`} className="text-xs text-gray-400 hover:text-brand-500 transition cursor-pointer">
           ← 프로젝트로 돌아가기
         </Link>
         <div className="mt-3 flex items-start justify-between gap-4">
@@ -454,7 +455,7 @@ export default function MeetingDetailPage() {
           <div>
             <label className="block text-xs text-gray-500 mb-1">제목</label>
             <input
-              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-300"
               value={editForm.title}
               onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
               required
@@ -464,7 +465,7 @@ export default function MeetingDetailPage() {
             <label className="block text-xs text-gray-500 mb-1">일시</label>
             <input
               type="datetime-local"
-              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-300"
               value={editForm.scheduledAt}
               onChange={e => setEditForm(f => ({ ...f, scheduledAt: e.target.value }))}
               required
@@ -474,7 +475,7 @@ export default function MeetingDetailPage() {
             <button type="button" onClick={() => setEditMode(false)}
               className="flex-1 border border-gray-300 rounded py-2 text-sm text-gray-600 hover:bg-white transition cursor-pointer">취소</button>
             <button type="submit" disabled={saving}
-              className="flex-1 bg-orange-500 text-white rounded py-2 text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer">
+              className="flex-1 bg-brand-500 text-white rounded py-2 text-sm hover:bg-brand-600 transition disabled:opacity-50 cursor-pointer">
               {saving ? '저장 중...' : '저장'}
             </button>
           </div>
@@ -482,16 +483,12 @@ export default function MeetingDetailPage() {
       )}
 
       {/* 탭 */}
-      <div className="flex border-b border-gray-200 mb-5">
+      <div className="tab-bar">
         {availableTabs.map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition cursor-pointer ${
-              tab === t.key
-                ? 'border-orange-500 text-orange-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+            className={`tab-item ${tab === t.key ? 'tab-item-active' : ''}`}
           >{t.label}</button>
         ))}
       </div>

@@ -53,6 +53,12 @@ export const projectsApi = {
   confirmWbs: (projectId: string) =>
     client.patch<ProjectWbs>(`/projects/${projectId}/wbs`).then(r => r.data),
 
+  updateWbsTeamResources: (
+    projectId: string,
+    teamResources: { department: string; role: string; experience_level: string }[],
+  ) =>
+    client.patch<ProjectWbs>(`/projects/${projectId}/wbs/team-resources`, { teamResources }).then(r => r.data),
+
   updateWbsItem: (projectId: string, milestoneId: string, data: Partial<WbsItem>) =>
     client.patch<WbsItem>(`/projects/${projectId}/wbs/${milestoneId}`, data).then(r => r.data),
 

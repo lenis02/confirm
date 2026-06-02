@@ -3,9 +3,12 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { projectsApi } from '../api/projects';
 import { meetingsApi } from '../api/meetings';
 import { actionItemsApi } from '../api/actionItems';
+import Spinner from '../components/ui/Spinner';
 import type { Project, Document, ProjectWbs, WbsItem, Meeting, ActionItem } from '../types';
+import WbsGanttChart, { ROLE_BAR_PALETTE } from '../components/WbsGanttChart';
+import WbsCalendar from '../components/WbsCalendar';
 
-type Tab = 'wbs' | 'meetings' | 'members' | 'actions';
+type Tab = 'overview' | 'wbs' | 'meetings' | 'members' | 'actions';
 
 const ROLES = ['PM', 'DEVELOPER', 'DESIGNER', 'QA', 'DEVOPS', 'OTHER'] as const;
 
@@ -14,13 +17,13 @@ const MEETING_TYPE_LABEL: Record<string, string> = {
 };
 const MEETING_TYPE_COLOR: Record<string, string> = {
   KICKOFF: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-  PROGRESS_CHECK: 'bg-orange-50 text-orange-600 border-orange-200',
+  PROGRESS_CHECK: 'bg-brand-50 text-brand-600 border-brand-100',
   ISSUE_CHECK: 'bg-red-50 text-red-600 border-red-200',
   CONSENSUS: 'bg-green-50 text-green-700 border-green-200',
 };
 const MEETING_STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   SCHEDULED: { label: '예정', cls: 'bg-gray-50 text-gray-500 border-gray-200' },
-  IN_PROGRESS: { label: '진행 중', cls: 'bg-orange-50 text-orange-600 border-orange-200' },
+  IN_PROGRESS: { label: '진행 중', cls: 'bg-brand-50 text-brand-600 border-brand-100' },
   COMPLETED: { label: '완료', cls: 'bg-green-50 text-green-700 border-green-200' },
 };
 const COMPLEXITY_COLOR: Record<string, string> = {
@@ -44,7 +47,7 @@ const WBS_COLUMNS: { key: WbsSortKey | null; label: string }[] = [
   { key: null, label: '삭제' },
 ];
 const ROLE_COLOR: Record<string, string> = {
-  PM: 'bg-orange-50 text-orange-600 border-orange-200',
+  PM: 'bg-brand-50 text-brand-600 border-brand-100',
   DEVELOPER: 'bg-gray-50 text-gray-700 border-gray-200',
   DESIGNER: 'bg-pink-50 text-pink-700 border-pink-200',
   QA: 'bg-yellow-50 text-yellow-700 border-yellow-200',
@@ -52,21 +55,9 @@ const ROLE_COLOR: Record<string, string> = {
   OTHER: 'bg-gray-50 text-gray-500 border-gray-200',
 };
 
-type BarColor = { bg: string; text: string; border: string };
-
-const ROLE_BAR_PALETTE: BarColor[] = [
-  { bg: '#FECACA', text: '#991B1B', border: '#F87171' }, // 🔴 red 200/400 + text 800
-  { bg: '#FDE68A', text: '#92400E', border: '#FBBF24' }, // 🟡 amber 200/400 + text 800
-  { bg: '#A7F3D0', text: '#065F46', border: '#34D399' }, // 🟢 emerald 200/400 + text 800
-  { bg: '#BAE6FD', text: '#075985', border: '#38BDF8' }, // 🔵 sky 200/400 + text 800
-  { bg: '#DDD6FE', text: '#5B21B6', border: '#A78BFA' }, // 🟣 violet 200/400 + text 800
-  { bg: '#FBCFE8', text: '#9D174D', border: '#F472B6' }, // 🌸 pink 200/400 + text 800
-];
-
-const FALLBACK_BAR_COLOR: BarColor = { bg: '#E5E7EB', text: '#374151', border: '#9CA3AF' };
-
 // ── WBS 탭 ────────────────────────────────────────────────────────────────────
-function WbsTab({ projectId }: { projectId: string }) {
+function WbsTab({ project }: { project: Project }) {
+  const projectId = project.id;
   const [docs, setDocs] = useState<Document[]>([]);
   const [wbs, setWbs] = useState<ProjectWbs | null>(null);
   const [wbsError, setWbsError] = useState(false);
@@ -78,7 +69,7 @@ function WbsTab({ projectId }: { projectId: string }) {
   const [savingItem, setSavingItem] = useState(false);
   const [sortKey, setSortKey] = useState<WbsSortKey>('id');
   const [sortAsc, setSortAsc] = useState(true);
-  const [viewMode, setViewMode] = useState<'table' | 'chart'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'chart' | 'member'>('table');
   const fileRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval>>();
 
@@ -208,18 +199,34 @@ function WbsTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center gap-3 bg-brand-50/60 border border-brand-100 rounded-xl px-4 py-3">
+        <svg className="w-5 h-5 text-brand-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-works-text">
+            목표 기간{' '}
+            {project.startDate
+              ? <span className="text-brand-700">{project.startDate} ~ {project.endDate ?? '미정'}</span>
+              : <span className="text-works-subtle">미설정</span>}
+          </p>
+          <p className="text-[11px] text-works-subtle mt-0.5">
+            사업계획서를 분석해 이 기간 안에서 팀원별 업무 선후 관계와 소요 일정을 계산한 WBS를 자동 생성합니다.
+          </p>
+        </div>
+      </div>
       <div
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         className={`border-2 rounded p-5 text-center transition ${
           dragging
-            ? 'border-solid border-orange-400 bg-orange-50'
+            ? 'border-solid border-brand-300 bg-brand-50'
             : 'border-dashed border-gray-200 bg-gray-50'
         }`}
       >
         <svg
-          className={`w-8 h-8 mx-auto mb-2 transition ${dragging ? 'text-orange-500' : 'text-gray-300'}`}
+          className={`w-8 h-8 mx-auto mb-2 transition ${dragging ? 'text-brand-500' : 'text-gray-300'}`}
           fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}
         >
           <path strokeLinecap="round" strokeLinejoin="round"
@@ -228,7 +235,7 @@ function WbsTab({ projectId }: { projectId: string }) {
         <p className="text-xs text-gray-400 mb-3">수행계획서(PDF)를 끌어다 놓거나 선택하면 AI가 WBS를 자동 생성합니다</p>
         <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={onInputChange} />
         <button onClick={() => fileRef.current?.click()} disabled={uploading || isProcessing}
-          className="border border-orange-400 text-orange-600 px-4 py-1.5 rounded text-sm hover:bg-orange-50 transition disabled:opacity-50 cursor-pointer">
+          className="border border-brand-300 text-brand-600 px-4 py-1.5 rounded text-sm hover:bg-brand-50 transition disabled:opacity-50 cursor-pointer">
           {uploading ? '업로드 중...' : '파일 선택'}
         </button>
       </div>
@@ -239,8 +246,8 @@ function WbsTab({ projectId }: { projectId: string }) {
             <div key={d.id} className="flex items-center gap-3 bg-white border border-gray-200 rounded px-4 py-2.5 text-sm">
               <span className="flex-1 truncate text-gray-700">{d.fileName}</span>
               {(d.status === 'PENDING' || d.status === 'IN_PROGRESS') ? (
-                <span className="flex items-center gap-1.5 text-xs text-orange-500">
-                  <span className="w-3.5 h-3.5 border-2 border-orange-400 border-t-transparent rounded-full animate-spin inline-block" />분석 중
+                <span className="flex items-center gap-1.5 text-xs text-brand-500">
+                  <span className="w-3.5 h-3.5 border-2 border-brand-300 border-t-transparent rounded-full animate-spin inline-block" />분석 중
                 </span>
               ) : d.status === 'COMPLETED' ? (
                 <span className="text-xs text-green-600">완료</span>
@@ -275,12 +282,16 @@ function WbsTab({ projectId }: { projectId: string }) {
                   className={`text-xs px-2 py-0.5 transition cursor-pointer border-l border-gray-200 ${viewMode === 'chart' ? 'bg-gray-700 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
                   차트
                 </button>
+                <button onClick={() => setViewMode('member')}
+                  className={`text-xs px-2 py-0.5 transition cursor-pointer border-l border-gray-200 ${viewMode === 'member' ? 'bg-gray-700 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+                  부서별
+                </button>
               </div>
             </div>
             <div className="flex items-center gap-2">
               {wbs.status === 'DRAFT' && (
                 <button onClick={confirm} disabled={confirming}
-                  className="bg-orange-500 text-white px-3 py-1.5 rounded text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer">
+                  className="bg-brand-500 text-white px-3 py-1.5 rounded text-sm hover:bg-brand-600 transition disabled:opacity-50 cursor-pointer">
                   {confirming ? '확정 중...' : 'WBS 확정'}
                 </button>
               )}
@@ -293,8 +304,11 @@ function WbsTab({ projectId }: { projectId: string }) {
           {wbs.projectSummary && (
             <p className="text-xs text-gray-600 bg-yellow-50 border border-yellow-100 rounded px-3 py-2 mb-3">{wbs.projectSummary}</p>
           )}
+          <TeamResourcesPanel projectId={projectId} wbs={wbs} onUpdated={setWbs} />
           {viewMode === 'chart' ? (
             <WbsGanttChart items={sortedItems} onItemClick={openItemModal} />
+          ) : viewMode === 'member' ? (
+            <WbsByMember items={sortedItems} onItemClick={openItemModal} />
           ) : (
           <div className="overflow-x-auto border border-gray-200 rounded">
             <table className="w-full text-sm">
@@ -320,11 +334,11 @@ function WbsTab({ projectId }: { projectId: string }) {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {sortedItems.map(item => (
-                  <tr key={item.id} className={`hover:bg-gray-50 ${item.isDecisionPoint ? 'bg-orange-50/40' : ''}`}>
+                  <tr key={item.id} className={`hover:bg-gray-50 ${item.isDecisionPoint ? 'bg-brand-50/40' : ''}`}>
                     <td className="px-3 py-2 text-gray-400 font-mono text-xs whitespace-nowrap">{item.taskId ?? `T${String(item.order).padStart(2, '0')}`}</td>
                     <td className="px-3 py-2 max-w-xs">
                       <button onClick={() => openItemModal(item)}
-                        className="block w-full text-left text-sm font-medium text-gray-800 truncate hover:text-orange-600 hover:underline transition cursor-pointer">
+                        className="block w-full text-left text-sm font-medium text-gray-800 truncate hover:text-brand-600 hover:underline transition cursor-pointer">
                         {item.title}
                       </button>
                       {item.reasoning && <div className="text-xs text-gray-400 truncate">{item.reasoning}</div>}
@@ -342,7 +356,7 @@ function WbsTab({ projectId }: { projectId: string }) {
                     <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">{item.endDate ?? '-'}</td>
                     <td className="px-3 py-2">
                       <button onClick={() => toggleDecision(item.id, item.isDecisionPoint)}
-                        className={`w-4 h-4 border flex items-center justify-center transition cursor-pointer rounded-sm ${item.isDecisionPoint ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-300 hover:border-orange-400'}`}>
+                        className={`w-4 h-4 border flex items-center justify-center transition cursor-pointer rounded-sm ${item.isDecisionPoint ? 'bg-brand-500 border-brand-500 text-white' : 'border-gray-300 hover:border-brand-300'}`}>
                         {item.isDecisionPoint && <span className="text-xs leading-none">✓</span>}
                       </button>
                     </td>
@@ -375,19 +389,19 @@ function WbsTab({ projectId }: { projectId: string }) {
 
             <div>
               <label className="block text-xs text-gray-500 mb-1">태스크명</label>
-              <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+              <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-300"
                 value={itemForm.title} onChange={e => setItemForm(f => ({ ...f, title: e.target.value }))} />
             </div>
 
             <div className="flex gap-2">
               <div className="flex-1">
                 <label className="block text-xs text-gray-500 mb-1">부서</label>
-                <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+                <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-300"
                   value={itemForm.assignedRole} onChange={e => setItemForm(f => ({ ...f, assignedRole: e.target.value }))} />
               </div>
               <div className="w-24">
                 <label className="block text-xs text-gray-500 mb-1">기간(일)</label>
-                <input type="number" min={0} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+                <input type="number" min={0} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-300"
                   value={itemForm.durationDays} onChange={e => setItemForm(f => ({ ...f, durationDays: Number(e.target.value) }))} />
               </div>
             </div>
@@ -395,19 +409,19 @@ function WbsTab({ projectId }: { projectId: string }) {
             <div className="flex gap-2">
               <div className="flex-1">
                 <label className="block text-xs text-gray-500 mb-1">시작일</label>
-                <input type="date" className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+                <input type="date" className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-300"
                   value={itemForm.startDate} onChange={e => setItemForm(f => ({ ...f, startDate: e.target.value }))} />
               </div>
               <div className="flex-1">
                 <label className="block text-xs text-gray-500 mb-1">종료일</label>
-                <input type="date" className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+                <input type="date" className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-300"
                   value={itemForm.endDate} onChange={e => setItemForm(f => ({ ...f, endDate: e.target.value }))} />
               </div>
             </div>
 
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                <input type="checkbox" className="accent-orange-500 cursor-pointer"
+                <input type="checkbox" className="accent-brand-500 cursor-pointer"
                   checked={itemForm.isDecisionPoint}
                   onChange={e => setItemForm(f => ({ ...f, isDecisionPoint: e.target.checked }))} />
                 확인
@@ -432,7 +446,7 @@ function WbsTab({ projectId }: { projectId: string }) {
               <button onClick={() => setModalItem(null)}
                 className="flex-1 border border-gray-300 rounded py-2 text-sm text-gray-600 hover:bg-gray-50 transition cursor-pointer">취소</button>
               <button onClick={saveItem} disabled={savingItem}
-                className="flex-1 bg-orange-500 text-white rounded py-2 text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer">
+                className="flex-1 bg-brand-500 text-white rounded py-2 text-sm hover:bg-brand-600 transition disabled:opacity-50 cursor-pointer">
                 {savingItem ? '저장 중...' : '저장'}
               </button>
             </div>
@@ -443,124 +457,192 @@ function WbsTab({ projectId }: { projectId: string }) {
   );
 }
 
-// ── WBS 간트 차트 ─────────────────────────────────────────────────────────────
-function WbsGanttChart({ items, onItemClick }: { items: WbsItem[]; onItemClick: (item: WbsItem) => void }) {
-  const DAY_MS = 86_400_000;
-  const PX_PER_DAY = 10;
-  const ROW_HEIGHT = 32;
-  const NAME_WIDTH = 220;
-
-  const validItems = items.filter(i => i.startDate && i.endDate);
-  const omitted = items.length - validItems.length;
-
-  if (validItems.length === 0) {
-    return (
-      <div className="border border-gray-200 rounded p-8 text-center text-sm text-gray-400">
-        일정이 있는 태스크가 없어 차트를 표시할 수 없습니다
-      </div>
-    );
+// ── WBS 부서별 뷰 ─────────────────────────────────────────────────────────────
+function WbsByMember({ items, onItemClick }: { items: WbsItem[]; onItemClick: (item: WbsItem) => void }) {
+  if (items.length === 0) {
+    return <div className="border border-gray-200 rounded p-8 text-center text-sm text-gray-400">태스크가 없습니다</div>;
   }
-
-  const sorted = [...validItems].sort((a, b) => (a.startDate ?? '').localeCompare(b.startDate ?? ''));
-  const uniqueRoles = Array.from(new Set(sorted.map(i => i.assignedRole).filter((r): r is string => !!r)));
-  const roleColorMap = new Map<string, BarColor>();
-  uniqueRoles.forEach((role, i) => {
-    roleColorMap.set(role, ROLE_BAR_PALETTE[i % ROLE_BAR_PALETTE.length]);
-  });
-  const getRoleColor = (role?: string | null): BarColor =>
-    (role && roleColorMap.get(role)) || FALLBACK_BAR_COLOR;
-  const startTimes = sorted.map(i => new Date(i.startDate!).getTime());
-  const endTimes = sorted.map(i => new Date(i.endDate!).getTime());
-  const minTime = Math.min(...startTimes);
-  const maxTime = Math.max(...endTimes);
-  const totalDays = Math.max(1, Math.ceil((maxTime - minTime) / DAY_MS) + 1);
-  const chartWidth = totalDays * PX_PER_DAY;
-
-  const tickStart = new Date(minTime);
-  tickStart.setDate(1);
-  const monthTicks: { left: number; label: string }[] = [];
-  for (const cursor = new Date(tickStart); cursor.getTime() <= maxTime; cursor.setMonth(cursor.getMonth() + 1)) {
-    const offsetDays = (cursor.getTime() - minTime) / DAY_MS;
-    monthTicks.push({
-      left: Math.max(0, offsetDays * PX_PER_DAY),
-      label: `${cursor.getFullYear()}.${String(cursor.getMonth() + 1).padStart(2, '0')}`,
-    });
+  const groups = new Map<string, WbsItem[]>();
+  for (const it of items) {
+    const role = it.assignedRole || '미지정';
+    if (!groups.has(role)) groups.set(role, []);
+    groups.get(role)!.push(it);
   }
-
   return (
-    <div className="border border-gray-200 rounded">
-      {(omitted > 0 || uniqueRoles.length > 0) && (
-        <div className="flex items-center justify-between gap-4 px-3 py-2 border-b border-gray-100 bg-gray-50">
-          <p className="text-xs text-gray-400">
-            {omitted > 0 ? `일정 미정 ${omitted}건은 차트에서 제외되었습니다` : ''}
-          </p>
-          {uniqueRoles.length > 0 && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 justify-end">
-              {uniqueRoles.map(role => {
-                const c = getRoleColor(role);
-                return (
-                  <div key={role} className="flex items-center gap-1.5 text-xs">
-                    <span className="inline-block w-3 h-3 rounded-sm border" style={{ backgroundColor: c.bg, borderColor: c.border }} />
-                    <span className="text-gray-600">{role}</span>
-                  </div>
-                );
-              })}
+    <div className="space-y-3">
+      {[...groups.entries()].map(([role, tasks], i) => {
+        const c = ROLE_BAR_PALETTE[i % ROLE_BAR_PALETTE.length];
+        const totalDays = tasks.reduce((s, t) => s + (t.durationDays ?? 0), 0);
+        return (
+          <div key={role} className="border border-gray-200 rounded-lg overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+              <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: c.bg, border: `1px solid ${c.border}` }} />
+              <span className="text-sm font-semibold text-gray-800">{role}</span>
+              <span className="text-xs text-gray-400 ml-auto">태스크 {tasks.length}개 · 총 {totalDays}일</span>
             </div>
-          )}
-        </div>
-      )}
-      <div className="overflow-x-auto">
-        <div style={{ width: NAME_WIDTH + chartWidth }}>
-          <div className="flex border-b border-gray-200 bg-gray-50" style={{ height: 28 }}>
-            <div style={{ width: NAME_WIDTH }} className="flex items-center px-3 text-xs font-medium text-gray-500 border-r border-gray-200">
-              태스크
-            </div>
-            <div className="relative" style={{ width: chartWidth }}>
-              {monthTicks.map((t, i) => (
-                <div key={i} className="absolute top-0 bottom-0 flex items-center pl-1 text-xs text-gray-500 border-l border-gray-200" style={{ left: t.left }}>
-                  {t.label}
-                </div>
+            <div className="divide-y divide-gray-100">
+              {tasks.map(t => (
+                <button key={t.id} onClick={() => onItemClick(t)}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 transition cursor-pointer">
+                  <span className="text-gray-400 font-mono text-xs shrink-0">{t.taskId ?? `T${String(t.order).padStart(2, '0')}`}</span>
+                  <span className="flex-1 text-sm text-gray-800 truncate">{t.title}</span>
+                  {t.isDecisionPoint && <span className="text-xs text-brand-600 shrink-0">◆ 의사결정</span>}
+                  <span className="text-xs text-gray-400 shrink-0">{t.durationDays ?? 0}일</span>
+                  <span className="hidden sm:block text-xs text-gray-400 shrink-0 w-40 text-right">{t.startDate ?? '-'} ~ {t.endDate ?? '-'}</span>
+                </button>
               ))}
             </div>
           </div>
-          {sorted.map(item => {
-            const startTime = new Date(item.startDate!).getTime();
-            const endTime = new Date(item.endDate!).getTime();
-            const left = ((startTime - minTime) / DAY_MS) * PX_PER_DAY;
-            const width = Math.max(PX_PER_DAY, ((endTime - startTime) / DAY_MS + 1) * PX_PER_DAY);
-            const barColor = getRoleColor(item.assignedRole);
-            return (
-              <div key={item.id} className="flex border-b border-gray-100 hover:bg-gray-50/60" style={{ height: ROW_HEIGHT }}>
-                <div style={{ width: NAME_WIDTH }} className="flex items-center px-3 text-xs border-r border-gray-200 overflow-hidden">
-                  <span className="text-gray-400 font-mono mr-2 shrink-0">{item.taskId ?? `T${String(item.order).padStart(2, '0')}`}</span>
-                  <span className="text-gray-700 truncate">{item.title}</span>
-                </div>
-                <div className="relative" style={{ width: chartWidth }}>
-                  {monthTicks.map((t, i) => (
-                    <div key={i} className="absolute top-0 bottom-0 border-l border-gray-100" style={{ left: t.left }} />
-                  ))}
-                  {item.isDecisionPoint ? (
-                    <button onClick={() => onItemClick(item)}
-                      className="absolute cursor-pointer hover:opacity-80 transition"
-                      style={{ left: left - 8, top: ROW_HEIGHT / 2 - 8, width: 16, height: 16 }}
-                      title={item.title}>
-                      <svg viewBox="0 0 16 16" className="w-full h-full">
-                        <polygon points="8,1 15,8 8,15 1,8" className="fill-orange-500" />
-                      </svg>
-                    </button>
-                  ) : (
-                    <button onClick={() => onItemClick(item)}
-                      className="absolute border rounded px-1.5 text-xs truncate hover:shadow transition cursor-pointer text-left"
-                      style={{ left, width, top: ROW_HEIGHT / 2 - 10, height: 20, lineHeight: '18px', backgroundColor: barColor.bg, color: barColor.text, borderColor: barColor.border }}
-                      title={item.title}>
-                      {item.title}
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+        );
+      })}
+    </div>
+  );
+}
+
+// ── 인식한 팀 구성 확인 패널 ──────────────────────────────────────────────────
+type TeamRow = { department: string; role: string; experience_level: string };
+
+function TeamResourcesPanel({
+  projectId,
+  wbs,
+  onUpdated,
+}: {
+  projectId: string;
+  wbs: ProjectWbs;
+  onUpdated: (w: ProjectWbs) => void;
+}) {
+  const toRows = (w: ProjectWbs): TeamRow[] =>
+    (w.teamResources ?? []).map(r => ({
+      department: r.department ?? '',
+      role: r.role ?? '',
+      experience_level: r.experience_level ?? '',
+    }));
+
+  const [rows, setRows] = useState<TeamRow[]>(() => toRows(wbs));
+  const [draft, setDraft] = useState<TeamRow>({ department: '', role: '', experience_level: '' });
+  const [saving, setSaving] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+
+  useEffect(() => {
+    setRows(toRows(wbs));
+    setConfirmed(false);
+  }, [wbs.id, wbs.teamResources]);
+
+  const updateRow = (i: number, key: keyof TeamRow, value: string) =>
+    setRows(rs => rs.map((r, idx) => (idx === i ? { ...r, [key]: value } : r)));
+  const removeRow = (i: number) => { setRows(rs => rs.filter((_, idx) => idx !== i)); setConfirmed(false); };
+  const addRow = () => {
+    if (!draft.department.trim() && !draft.role.trim()) return;
+    setRows(rs => [...rs, {
+      department: draft.department.trim(),
+      role: draft.role.trim(),
+      experience_level: draft.experience_level.trim(),
+    }]);
+    setDraft({ department: '', role: '', experience_level: '' });
+    setConfirmed(false);
+  };
+
+  const save = async () => {
+    const cleaned = rows
+      .filter(r => r.department.trim() || r.role.trim())
+      .map(r => ({
+        department: r.department.trim(),
+        role: r.role.trim(),
+        experience_level: r.experience_level.trim(),
+      }));
+    setSaving(true);
+    try {
+      const updated = await projectsApi.updateWbsTeamResources(projectId, cleaned);
+      onUpdated(updated);
+      setConfirmed(true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isEmpty = rows.length === 0;
+
+  return (
+    <div className="card p-5 mb-4">
+      <div className="flex items-center gap-2 mb-1">
+        <h3 className="text-sm font-semibold text-works-text">사업계획서에서 인식한 팀 구성</h3>
+        {!isEmpty && <span className="badge bg-brand-50 text-brand-700 border-brand-100">{rows.length}개 부서</span>}
+        {confirmed && (
+          <span className="badge bg-green-50 text-green-700 border-green-200 ml-auto">✓ 확인 완료</span>
+        )}
+      </div>
+      <p className="text-xs text-works-subtle mb-4">
+        {isEmpty
+          ? '문서에서 팀 구성을 인식하지 못했습니다. 프로젝트에 필요한 부서/역할을 직접 입력해 주세요.'
+          : 'AI가 인식한 부서/역할 구성이 맞는지 확인하고 필요하면 수정하세요.'}
+      </p>
+
+      {!isEmpty && (
+        <div className="space-y-2 mb-3">
+          {rows.map((r, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                className="input-field !py-2 flex-1"
+                placeholder="부서"
+                value={r.department}
+                onChange={e => updateRow(i, 'department', e.target.value)}
+              />
+              <input
+                className="input-field !py-2 flex-1"
+                placeholder="역할"
+                value={r.role}
+                onChange={e => updateRow(i, 'role', e.target.value)}
+              />
+              <input
+                className="input-field !py-2 w-28"
+                placeholder="경력/직급"
+                value={r.experience_level}
+                onChange={e => updateRow(i, 'experience_level', e.target.value)}
+              />
+              <button
+                onClick={() => removeRow(i)}
+                className="text-works-subtle hover:text-red-500 transition cursor-pointer px-1 shrink-0"
+                title="삭제"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
         </div>
+      )}
+
+      {/* 추가 입력 폼 */}
+      <div className="flex items-center gap-2 pt-1">
+        <input
+          className="input-field !py-2 flex-1"
+          placeholder="부서 (예: 개발)"
+          value={draft.department}
+          onChange={e => setDraft(d => ({ ...d, department: e.target.value }))}
+          onKeyDown={e => { if (e.key === 'Enter') addRow(); }}
+        />
+        <input
+          className="input-field !py-2 flex-1"
+          placeholder="역할 (예: 백엔드)"
+          value={draft.role}
+          onChange={e => setDraft(d => ({ ...d, role: e.target.value }))}
+          onKeyDown={e => { if (e.key === 'Enter') addRow(); }}
+        />
+        <input
+          className="input-field !py-2 w-32"
+          placeholder="경력/직급"
+          value={draft.experience_level}
+          onChange={e => setDraft(d => ({ ...d, experience_level: e.target.value }))}
+          onKeyDown={e => { if (e.key === 'Enter') addRow(); }}
+        />
+        <button onClick={addRow} className="btn-secondary !py-2 shrink-0">추가</button>
+      </div>
+
+      <div className="flex justify-end pt-4">
+        <button onClick={save} disabled={saving} className="btn-primary">
+          {saving ? '저장 중...' : isEmpty ? '팀 구성 저장' : '팀 구성 확인'}
+        </button>
       </div>
     </div>
   );
@@ -606,28 +688,28 @@ function MeetingsTab({ projectId }: { projectId: string }) {
     <div className="space-y-4">
       <div className="flex justify-end">
         <button onClick={() => setShowForm(!showForm)}
-          className="border border-orange-400 text-orange-600 px-3 py-1.5 rounded text-sm hover:bg-orange-50 transition cursor-pointer">
+          className="border border-brand-300 text-brand-600 px-3 py-1.5 rounded text-sm hover:bg-brand-50 transition cursor-pointer">
           + 회의 생성
         </button>
       </div>
 
       {showForm && (
         <form onSubmit={create} className="bg-gray-50 border border-gray-200 rounded p-4 space-y-3">
-          <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-orange-400"
+          <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-brand-300"
             placeholder="회의 제목 *" required value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
           <div className="flex gap-2">
-            <select className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-orange-400 cursor-pointer"
+            <select className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-brand-300 cursor-pointer"
               value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
               {Object.entries(MEETING_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
-            <input type="datetime-local" className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-orange-400"
+            <input type="datetime-local" className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-brand-300"
               required value={form.scheduledAt} onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))} />
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={() => setShowForm(false)}
               className="flex-1 border border-gray-300 rounded py-2 text-sm text-gray-600 hover:bg-white transition cursor-pointer">취소</button>
             <button type="submit" disabled={loading}
-              className="flex-1 bg-orange-500 text-white rounded py-2 text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer">
+              className="flex-1 bg-brand-500 text-white rounded py-2 text-sm hover:bg-brand-600 transition disabled:opacity-50 cursor-pointer">
               {loading ? '생성 중...' : '생성'}
             </button>
           </div>
@@ -637,15 +719,15 @@ function MeetingsTab({ projectId }: { projectId: string }) {
       {editTarget && (
         <form onSubmit={saveEdit} className="bg-gray-50 border border-gray-200 rounded p-4 space-y-3">
           <p className="text-xs font-medium text-gray-500">회의 수정</p>
-          <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-orange-400"
+          <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-brand-300"
             required value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} />
-          <input type="datetime-local" className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-orange-400"
+          <input type="datetime-local" className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-brand-300"
             required value={editForm.scheduledAt} onChange={e => setEditForm(f => ({ ...f, scheduledAt: e.target.value }))} />
           <div className="flex gap-2">
             <button type="button" onClick={() => setEditTarget(null)}
               className="flex-1 border border-gray-300 rounded py-2 text-sm text-gray-600 hover:bg-white transition cursor-pointer">취소</button>
             <button type="submit" disabled={loading}
-              className="flex-1 bg-orange-500 text-white rounded py-2 text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer">
+              className="flex-1 bg-brand-500 text-white rounded py-2 text-sm hover:bg-brand-600 transition disabled:opacity-50 cursor-pointer">
               {loading ? '저장 중...' : '저장'}
             </button>
           </div>
@@ -663,7 +745,7 @@ function MeetingsTab({ projectId }: { projectId: string }) {
                 <span className={`text-xs px-1.5 py-0.5 border rounded ${MEETING_TYPE_COLOR[m.type]}`}>
                   {MEETING_TYPE_LABEL[m.type]}
                 </span>
-                <Link to={`/meetings/${m.id}`} className="flex-1 text-sm font-medium text-gray-800 truncate hover:text-orange-600 transition cursor-pointer">
+                <Link to={`/meetings/${m.id}`} className="flex-1 text-sm font-medium text-gray-800 truncate hover:text-brand-600 transition cursor-pointer">
                   {m.title}
                 </Link>
                 <span className="text-xs text-gray-400">{new Date(m.scheduledAt).toLocaleDateString('ko-KR')}</span>
@@ -718,7 +800,7 @@ function MembersTab({ project, onReload }: { project: Project; onReload: () => v
     <div className="space-y-4">
       <div className="flex justify-end">
         <button onClick={() => setShowForm(!showForm)}
-          className="border border-orange-400 text-orange-600 px-3 py-1.5 rounded text-sm hover:bg-orange-50 transition cursor-pointer">
+          className="border border-brand-300 text-brand-600 px-3 py-1.5 rounded text-sm hover:bg-brand-50 transition cursor-pointer">
           + 팀원 추가
         </button>
       </div>
@@ -727,13 +809,13 @@ function MembersTab({ project, onReload }: { project: Project; onReload: () => v
         <form onSubmit={addMember} className="bg-gray-50 border border-gray-200 rounded p-4 space-y-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">사용자 ID <span className="text-red-400">*</span></label>
-            <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-orange-400"
+            <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-brand-300"
               placeholder="초대할 사용자 ID" required value={form.userId}
               onChange={e => setForm(f => ({ ...f, userId: e.target.value }))} />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">역할</label>
-            <select className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-orange-400 cursor-pointer"
+            <select className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-brand-300 cursor-pointer"
               value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
               {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
@@ -742,7 +824,7 @@ function MembersTab({ project, onReload }: { project: Project; onReload: () => v
             <button type="button" onClick={() => setShowForm(false)}
               className="flex-1 border border-gray-300 rounded py-2 text-sm text-gray-600 hover:bg-white transition cursor-pointer">취소</button>
             <button type="submit" disabled={loading}
-              className="flex-1 bg-orange-500 text-white rounded py-2 text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer">
+              className="flex-1 bg-brand-500 text-white rounded py-2 text-sm hover:bg-brand-600 transition disabled:opacity-50 cursor-pointer">
               {loading ? '추가 중...' : '추가'}
             </button>
           </div>
@@ -752,7 +834,7 @@ function MembersTab({ project, onReload }: { project: Project; onReload: () => v
       <div className="space-y-1.5">
         {project.members.map(m => (
           <div key={m.id} className="bg-white border border-gray-200 rounded px-4 py-3 flex items-center gap-3">
-            <div className="w-7 h-7 bg-orange-500 text-white rounded-full flex items-center justify-center text-xs font-semibold shrink-0">
+            <div className="w-7 h-7 bg-brand-500 text-white rounded-full flex items-center justify-center text-xs font-semibold shrink-0">
               {m.user?.name?.[0] ?? '?'}
             </div>
             <div className="flex-1 min-w-0">
@@ -763,14 +845,14 @@ function MembersTab({ project, onReload }: { project: Project; onReload: () => v
             {editingId === m.id ? (
               <div className="flex items-center gap-2">
                 <select
-                  className="border border-gray-300 rounded px-2 py-1 text-xs bg-white cursor-pointer focus:outline-none focus:border-orange-400"
+                  className="border border-gray-300 rounded px-2 py-1 text-xs bg-white cursor-pointer focus:outline-none focus:border-brand-300"
                   value={editRole}
                   onChange={e => setEditRole(e.target.value)}
                 >
                   {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
                 <button onClick={() => updateRole(m.id)}
-                  className="text-xs bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600 transition cursor-pointer">저장</button>
+                  className="text-xs bg-brand-500 text-white px-2 py-1 rounded hover:bg-brand-600 transition cursor-pointer">저장</button>
                 <button onClick={() => setEditingId(null)}
                   className="text-xs border border-gray-300 text-gray-500 px-2 py-1 rounded hover:bg-gray-50 transition cursor-pointer">취소</button>
               </div>
@@ -812,29 +894,29 @@ function ActionItemsTab({ projectId, members }: { projectId: string; members: Pr
     <div className="space-y-4">
       <div className="flex justify-end">
         <button onClick={() => setShowForm(!showForm)}
-          className="border border-orange-400 text-orange-600 px-3 py-1.5 rounded text-sm hover:bg-orange-50 transition cursor-pointer">
+          className="border border-brand-300 text-brand-600 px-3 py-1.5 rounded text-sm hover:bg-brand-50 transition cursor-pointer">
           + Action Item
         </button>
       </div>
 
       {showForm && (
         <form onSubmit={create} className="bg-gray-50 border border-gray-200 rounded p-4 space-y-3">
-          <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-orange-400"
+          <input className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-brand-300"
             placeholder="제목 *" required value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
           <div className="flex gap-2">
-            <select className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-orange-400 cursor-pointer"
+            <select className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-brand-300 cursor-pointer"
               required value={form.assigneeId} onChange={e => setForm(f => ({ ...f, assigneeId: e.target.value }))}>
               <option value="">담당자 선택 *</option>
               {members.map(m => <option key={m.userId} value={m.userId}>{m.user?.name}</option>)}
             </select>
-            <input type="date" className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-orange-400"
+            <input type="date" className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-brand-300"
               required value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={() => setShowForm(false)}
               className="flex-1 border border-gray-300 rounded py-2 text-sm text-gray-600 hover:bg-white transition cursor-pointer">취소</button>
             <button type="submit" disabled={loading}
-              className="flex-1 bg-orange-500 text-white rounded py-2 text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer">
+              className="flex-1 bg-brand-500 text-white rounded py-2 text-sm hover:bg-brand-600 transition disabled:opacity-50 cursor-pointer">
               {loading ? '추가 중...' : '추가'}
             </button>
           </div>
@@ -848,7 +930,7 @@ function ActionItemsTab({ projectId, members }: { projectId: string; members: Pr
           {items.map(item => (
             <div key={item.id} className={`bg-white border border-gray-200 rounded px-4 py-2.5 flex items-center gap-3 ${item.status === 'COMPLETED' ? 'opacity-50' : ''}`}>
               <button onClick={() => toggle(item.id)}
-                className={`w-4 h-4 border flex items-center justify-center shrink-0 transition cursor-pointer rounded-sm ${item.status === 'COMPLETED' ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-300 hover:border-orange-400'}`}>
+                className={`w-4 h-4 border flex items-center justify-center shrink-0 transition cursor-pointer rounded-sm ${item.status === 'COMPLETED' ? 'bg-brand-500 border-brand-500 text-white' : 'border-gray-300 hover:border-brand-300'}`}>
                 {item.status === 'COMPLETED' && <span className="text-xs leading-none">✓</span>}
               </button>
               <span className={`flex-1 text-sm ${item.status === 'COMPLETED' ? 'line-through text-gray-400' : 'text-gray-800'}`}>{item.title}</span>
@@ -865,8 +947,107 @@ function ActionItemsTab({ projectId, members }: { projectId: string; members: Pr
   );
 }
 
+// ── 개요(워크스페이스) 탭 ──────────────────────────────────────────────────────
+function OverviewTab({ project, onNavigate }: { project: Project; onNavigate: (tab: Tab) => void }) {
+  const navigate = useNavigate();
+  const [wbs, setWbs] = useState<ProjectWbs | null>(null);
+  const [wbsLoading, setWbsLoading] = useState(true);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+
+  useEffect(() => {
+    setWbsLoading(true);
+    projectsApi.getWbs(project.id)
+      .then(setWbs)
+      .catch(() => setWbs(null))
+      .finally(() => setWbsLoading(false));
+    meetingsApi.list(project.id).then(setMeetings).catch(() => setMeetings([]));
+  }, [project.id]);
+
+  const taskCount = wbs?.items.length ?? 0;
+  const decisionCount = wbs?.items.filter(i => i.isDecisionPoint).length ?? 0;
+  const departments = Array.from(
+    new Set((wbs?.items ?? []).map(i => i.assignedRole).filter((r): r is string => !!r)),
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* 1. 부서별 색상 */}
+      <div className="card p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <h3 className="text-sm font-semibold text-works-text">부서별 색상</h3>
+          {departments.length > 0 && (
+            <span className="badge bg-brand-50 text-brand-700 border-brand-100">{departments.length}개 부서</span>
+          )}
+        </div>
+        {departments.length === 0 ? (
+          <p className="text-sm text-works-subtle py-4 text-center">WBS가 생성되면 부서별 색상이 표시됩니다.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2.5">
+            {departments.map((dept, i) => {
+              const c = ROLE_BAR_PALETTE[i % ROLE_BAR_PALETTE.length];
+              return (
+                <div key={dept} className="flex items-center gap-2 border border-works-border rounded-xl px-3 py-1.5 bg-white">
+                  <span className="w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: c.bg, border: `1px solid ${c.border}` }} />
+                  <span className="text-sm font-medium text-works-text">{dept}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 2. 프로젝트 캘린더 (WBS 간트 일정 합산) */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <h3 className="text-sm font-semibold text-works-text">프로젝트 캘린더</h3>
+          <span className="text-xs text-works-subtle">WBS 일정과 회의가 합쳐진 일정표</span>
+        </div>
+        {wbsLoading ? (
+          <div className="card flex justify-center py-16"><Spinner /></div>
+        ) : (
+          <WbsCalendar
+            items={wbs?.items ?? []}
+            meetings={meetings}
+            onItemClick={() => onNavigate('wbs')}
+            onMeetingClick={id => navigate(`/meetings/${id}`)}
+          />
+        )}
+      </div>
+
+      {/* 3. WBS 현황 */}
+      <div className="card p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-works-text">WBS 현황</h3>
+          <button onClick={() => onNavigate('wbs')} className="text-xs text-brand-600 font-medium hover:underline cursor-pointer">
+            WBS 보기 →
+          </button>
+        </div>
+        {wbsLoading ? (
+          <div className="flex justify-center py-6"><Spinner /></div>
+        ) : wbs ? (
+          <div className="flex items-center gap-3">
+            <span className={`badge ${wbs.status === 'CONFIRMED' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
+              {wbs.status === 'CONFIRMED' ? '확정됨' : '초안'}
+            </span>
+            <p className="text-sm text-works-muted">
+              사업계획서 분석으로 <span className="font-semibold text-works-text">{taskCount}개</span> 태스크가 생성되었습니다
+              {decisionCount > 0 && <> · 의사결정 포인트 <span className="font-semibold text-works-text">{decisionCount}개</span></>}
+            </p>
+          </div>
+        ) : (
+          <div className="text-center py-6">
+            <p className="text-sm text-works-muted mb-3">아직 생성된 WBS가 없습니다. 사업계획서를 업로드하면 AI가 WBS를 자동 생성합니다.</p>
+            <button onClick={() => onNavigate('wbs')} className="btn-primary">사업계획서 업로드 →</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── 메인 ─────────────────────────────────────────────────────────────────────
 const TABS: { key: Tab; label: string }[] = [
+  { key: 'overview', label: '개요' },
   { key: 'wbs', label: 'WBS' },
   { key: 'meetings', label: '회의' },
   { key: 'members', label: '팀원' },
@@ -874,7 +1055,7 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 const PROJECT_STATUS: Record<string, { label: string; cls: string }> = {
-  ACTIVE: { label: '진행 중', cls: 'bg-orange-50 text-orange-600 border border-orange-200' },
+  ACTIVE: { label: '진행 중', cls: 'bg-brand-50 text-brand-600 border border-brand-100' },
   ARCHIVED: { label: '완료', cls: 'bg-gray-50 text-gray-500 border border-gray-200' },
 };
 
@@ -882,7 +1063,7 @@ export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
-  const [tab, setTab] = useState<Tab>('wbs');
+  const [tab, setTab] = useState<Tab>('overview');
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({ name: '', description: '', startDate: '', endDate: '' });
   const [saving, setSaving] = useState(false);
@@ -894,7 +1075,7 @@ export default function ProjectDetailPage() {
   if (!project) {
     return (
       <div className="flex justify-center py-20">
-        <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+        <Spinner />
       </div>
     );
   }
@@ -933,15 +1114,15 @@ export default function ProjectDetailPage() {
   const st = PROJECT_STATUS[project.status];
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="page-shell">
       {/* 헤더 */}
       <div className="mb-5 pb-4 border-b border-gray-200">
         {editMode ? (
           <form onSubmit={saveEdit} className="space-y-3">
             <div className="flex gap-2">
-              <input className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+              <input className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-300"
                 required value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} />
-              <select className="border border-gray-300 rounded px-3 py-2 text-sm cursor-pointer focus:outline-none focus:border-orange-400 bg-white"
+              <select className="border border-gray-300 rounded px-3 py-2 text-sm cursor-pointer focus:outline-none focus:border-brand-300 bg-white"
                 value={project.status} onChange={async e => {
                   const updated = await projectsApi.update(project.id, { status: e.target.value });
                   setProject(updated);
@@ -950,20 +1131,20 @@ export default function ProjectDetailPage() {
                 <option value="ARCHIVED">완료</option>
               </select>
             </div>
-            <textarea className="w-full border border-gray-300 rounded px-3 py-2 text-sm resize-none focus:outline-none focus:border-orange-400"
+            <textarea className="w-full border border-gray-300 rounded px-3 py-2 text-sm resize-none focus:outline-none focus:border-brand-300"
               rows={2} placeholder="설명" value={editForm.description}
               onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
             <div className="flex gap-2">
-              <input type="date" className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+              <input type="date" className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-300"
                 value={editForm.startDate} onChange={e => setEditForm(f => ({ ...f, startDate: e.target.value }))} />
-              <input type="date" className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+              <input type="date" className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-300"
                 value={editForm.endDate} onChange={e => setEditForm(f => ({ ...f, endDate: e.target.value }))} />
             </div>
             <div className="flex gap-2">
               <button type="button" onClick={() => setEditMode(false)}
                 className="border border-gray-300 rounded px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition cursor-pointer">취소</button>
               <button type="submit" disabled={saving}
-                className="bg-orange-500 text-white rounded px-3 py-2 text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer">
+                className="bg-brand-500 text-white rounded px-3 py-2 text-sm hover:bg-brand-600 transition disabled:opacity-50 cursor-pointer">
                 {saving ? '저장 중...' : '저장'}
               </button>
             </div>
@@ -989,16 +1170,15 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* 탭 */}
-      <div className="flex border-b border-gray-200 mb-5">
+      <div className="tab-bar">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition cursor-pointer ${
-              tab === t.key ? 'border-orange-500 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}>{t.label}</button>
+            className={`tab-item ${tab === t.key ? 'tab-item-active' : ''}`}>{t.label}</button>
         ))}
       </div>
 
-      {tab === 'wbs' && <WbsTab projectId={project.id} />}
+      {tab === 'overview' && <OverviewTab project={project} onNavigate={setTab} />}
+      {tab === 'wbs' && <WbsTab project={project} />}
       {tab === 'meetings' && <MeetingsTab projectId={project.id} />}
       {tab === 'members' && <MembersTab project={project} onReload={load} />}
       {tab === 'actions' && <ActionItemsTab projectId={project.id} members={project.members} />}

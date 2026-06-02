@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { usersApi } from '../api/users';
+import Spinner from '../components/ui/Spinner';
 import type { User } from '../types';
 
 const JOB_TITLES = ['PM', '개발자', '디자이너', 'QA', 'DevOps', '기타'];
@@ -33,69 +34,59 @@ export default function ProfilePage() {
   };
 
   if (!user) {
-    return (
-      <div className="flex justify-center py-20">
-        <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <div className="flex justify-center py-24"><Spinner /></div>;
   }
 
   return (
-    <div className="p-6 max-w-lg">
-      <h2 className="text-base font-semibold text-gray-800 mb-5">프로필 설정</h2>
+    <div className="page-shell max-w-xl">
+      <div className="mb-6">
+        <h1 className="page-title">프로필</h1>
+        <p className="page-subtitle">계정 정보 및 직군 설정</p>
+      </div>
 
-      <div className="bg-white border border-gray-200 rounded">
-        {/* 아바타 + 이메일 */}
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-4">
-          <div className="w-12 h-12 bg-orange-500 text-white rounded-full flex items-center justify-center text-lg font-bold shrink-0">
+      <div className="card overflow-hidden">
+        <div className="px-6 py-5 bg-gradient-to-r from-brand-50 to-white border-b border-works-border flex items-center gap-4">
+          <div className="w-14 h-14 bg-brand-500 text-white rounded-2xl flex items-center justify-center text-xl font-bold shrink-0 shadow-sm">
             {user.name[0]}
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-800">{user.name}</p>
-            <p className="text-xs text-gray-400">{user.email}</p>
+            <p className="text-base font-semibold text-works-text">{user.name}</p>
+            <p className="text-sm text-works-muted">{user.email}</p>
           </div>
         </div>
 
-        <form onSubmit={submit} className="px-5 py-4 space-y-4">
+        <form onSubmit={submit} className="px-6 py-5 space-y-4">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">이름 <span className="text-red-400">*</span></label>
-            <input
-              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              required
-            />
+            <label className="block text-xs font-medium text-works-muted mb-1.5">이름 <span className="text-red-400">*</span></label>
+            <input className="input-field" value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">이메일</label>
-            <input
-              className="w-full border border-gray-200 rounded px-3 py-2 text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
-              value={user.email}
-              disabled
-            />
-            <p className="text-xs text-gray-400 mt-1">이메일은 변경할 수 없습니다</p>
+            <label className="block text-xs font-medium text-works-muted mb-1.5">이메일</label>
+            <input className="input-field bg-works-bg text-works-subtle cursor-not-allowed" value={user.email} disabled />
+            <p className="text-xs text-works-subtle mt-1">이메일은 변경할 수 없습니다</p>
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">직군</label>
-            <select
-              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400 cursor-pointer bg-white"
-              value={form.jobTitle}
-              onChange={e => setForm(f => ({ ...f, jobTitle: e.target.value }))}
-            >
+            <label className="block text-xs font-medium text-works-muted mb-1.5">직군</label>
+            <select className="input-field cursor-pointer"
+              value={form.jobTitle} onChange={e => setForm(f => ({ ...f, jobTitle: e.target.value }))}>
               <option value="">선택 안 함</option>
               {JOB_TITLES.map(j => <option key={j} value={j}>{j}</option>)}
             </select>
           </div>
 
-          <div className="flex items-center gap-3 pt-1">
-            <button
-              type="submit"
-              disabled={saving}
-              className="bg-orange-500 text-white px-4 py-2 rounded text-sm hover:bg-orange-600 transition disabled:opacity-50 cursor-pointer"
-            >
+          <div className="flex items-center gap-3 pt-2">
+            <button type="submit" disabled={saving} className="btn-primary">
               {saving ? '저장 중...' : '저장'}
             </button>
-            {saved && <span className="text-xs text-green-600">저장됐습니다</span>}
+            {saved && (
+              <span className="text-xs text-brand-600 font-medium flex items-center gap-1">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                저장됐습니다
+              </span>
+            )}
           </div>
         </form>
       </div>

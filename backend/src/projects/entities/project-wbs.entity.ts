@@ -45,7 +45,11 @@ export class ProjectWbs {
   totalDuration: string;
 
   @Column({ name: 'team_resources', type: 'jsonb', nullable: true })
-  teamResources: { department: string; role: string; experience_level: string }[];
+  teamResources: {
+    department: string;
+    role: string;
+    experience_level: string;
+  }[];
 
   @Column({ type: 'enum', enum: WbsStatus, default: WbsStatus.DRAFT })
   status: WbsStatus;

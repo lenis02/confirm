@@ -1,3 +1,94 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-works-bg text-works-text font-sans antialiased;
+  }
+}
+
+@layer components {
+  .page-shell {
+    @apply p-6 lg:p-8 max-w-7xl mx-auto w-full;
+  }
+
+  .page-title {
+    @apply text-xl font-bold text-works-text tracking-tight;
+  }
+
+  .page-subtitle {
+    @apply text-sm text-works-muted mt-0.5;
+  }
+
+  .card {
+    @apply bg-white rounded-2xl shadow-card border border-works-border;
+  }
+
+  .input-field {
+    @apply w-full border border-works-border rounded-xl px-3.5 py-2.5 text-sm bg-white
+      text-works-text placeholder:text-works-subtle
+      focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500
+      transition;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 bg-brand-500 text-white
+      px-4 py-2.5 rounded-xl text-sm font-semibold
+      hover:bg-brand-600 active:bg-brand-700
+      disabled:opacity-50 disabled:pointer-events-none transition cursor-pointer;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 bg-white text-works-text
+      border border-works-border px-4 py-2.5 rounded-xl text-sm font-medium
+      hover:bg-works-hover disabled:opacity-50 disabled:pointer-events-none transition cursor-pointer;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 text-brand-600
+      border border-brand-200 bg-brand-50 px-4 py-2.5 rounded-xl text-sm font-medium
+      hover:bg-brand-100 disabled:opacity-50 disabled:pointer-events-none transition cursor-pointer;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 bg-white text-red-600
+      border border-red-200 px-4 py-2.5 rounded-xl text-sm font-medium
+      hover:bg-red-50 disabled:opacity-50 disabled:pointer-events-none transition cursor-pointer;
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
+      text-works-muted hover:bg-works-hover hover:text-works-text transition;
+  }
+
+  .nav-item-active {
+    @apply bg-brand-50 text-brand-700 hover:bg-brand-50 hover:text-brand-700;
+  }
+
+  .tab-bar {
+    @apply flex gap-1 border-b border-works-border mb-6;
+  }
+
+  .tab-item {
+    @apply px-4 py-2.5 text-sm font-medium text-works-muted border-b-2 border-transparent -mb-px
+      hover:text-works-text transition cursor-pointer;
+  }
+
+  .tab-item-active {
+    @apply text-brand-600 border-brand-500;
+  }
+
+  .badge {
+    @apply inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-md border;
+  }
+
+  .upload-zone {
+    @apply border-2 border-dashed border-works-border rounded-2xl p-8 text-center
+      bg-white transition cursor-pointer hover:border-brand-300 hover:bg-brand-50/30;
+  }
+
+  .upload-zone-active {
+    @apply border-brand-500 bg-brand-50;
+  }
+}

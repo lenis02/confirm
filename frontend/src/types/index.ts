@@ -115,5 +115,14 @@ export interface CalendarWeek {
     myRole: string;
     meetings: Pick<Meeting, 'id' | 'title' | 'type' | 'status' | 'scheduledAt'>[];
     actionItems: Pick<ActionItem, 'id' | 'title' | 'status' | 'dueDate' | 'isCarriedOver'>[];
+    milestones: {
+      id: string;
+      title: string;
+      phase: string;
+      assignedRole: string;
+      isDecisionPoint: boolean;
+      startDate: string | null;
+      endDate: string | null;
+    }[];
   }[];
 }
