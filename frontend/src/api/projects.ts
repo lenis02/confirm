@@ -21,7 +21,7 @@ export const projectsApi = {
   getMembers: (projectId: string) =>
     client.get<ProjectMember[]>(`/projects/${projectId}/members`).then(r => r.data),
 
-  addMember: (projectId: string, data: { userId: string; role: string }) =>
+  addMember: (projectId: string, data: { email: string; role: string }) =>
     client.post<ProjectMember>(`/projects/${projectId}/members`, data).then(r => r.data),
 
   updateMember: (projectId: string, memberId: string, data: { role: string }) =>
@@ -52,6 +52,12 @@ export const projectsApi = {
 
   confirmWbs: (projectId: string) =>
     client.patch<ProjectWbs>(`/projects/${projectId}/wbs`).then(r => r.data),
+
+  updateWbsTeamResources: (
+    projectId: string,
+    teamResources: { department: string; role: string; experience_level: string }[],
+  ) =>
+    client.patch<ProjectWbs>(`/projects/${projectId}/wbs/team-resources`, { teamResources }).then(r => r.data),
 
   updateWbsItem: (projectId: string, milestoneId: string, data: Partial<WbsItem>) =>
     client.patch<WbsItem>(`/projects/${projectId}/wbs/${milestoneId}`, data).then(r => r.data),

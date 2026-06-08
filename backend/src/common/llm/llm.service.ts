@@ -78,17 +78,12 @@ export class LlmService {
 
   async recommendMeetings(wbsContext: string): Promise<MeetingRecommendationRaw[]> {
     try {
-      const model = this.genAI.getGenerativeModel({
-        model: this.modelName,
-        systemInstruction: MEETING_RECOMMENDER_SYSTEM_PROMPT,
-      });
-
-      const result = await this.callWithRetry(
-        () => model.generateContent(`<wbs_data>\n${wbsContext}\n</wbs_data>`),
+      const text = await this.generateContentWithFallback(
+        MEETING_RECOMMENDER_SYSTEM_PROMPT,
+        `<wbs_data>\n${wbsContext}\n</wbs_data>`,
         'Gemini 회의 추천',
       );
 
-      const text = result.response.text().trim();
       const cleaned = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
       const parsed: { recommendations?: MeetingRecommendationRaw[] } = JSON.parse(cleaned);
 
@@ -102,9 +97,15 @@ export class LlmService {
     }
   }
 
+  // 과부하 시 순차 시도할 모델 후보 (기본 모델 우선, 중복 제거)
+  private get modelCandidates(): string[] {
+    const fallbacks = ['gemini-2.0-flash', 'gemini-flash-latest', 'gemini-1.5-flash'];
+    return [...new Set([this.modelName, ...fallbacks])];
+  }
+
   // 일시적 오류(503 과부하 / 429 rate limit / 500)에 대해 지수 백오프 재시도
   private async callWithRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
-    const maxRetries = 2; // 최초 1회 + 재시도 2회 = 총 3회 (대기 1s, 2s)
+    const maxRetries = 3; // 최초 1회 + 재시도 3회 = 총 4회 (대기 1s, 2s, 4s)
     for (let attempt = 0; ; attempt++) {
       try {
         return await fn();
@@ -122,19 +123,44 @@ export class LlmService {
     }
   }
 
+  // 모델별로 재시도하다가 과부하(503)·레이트리밋(429)·모델없음(404)이 지속되면 다음 후보 모델로 폴백
+  private async generateContentWithFallback(
+    systemInstruction: string,
+    userContent: string,
+    label: string,
+  ): Promise<string> {
+    let lastErr: unknown;
+    for (const modelName of this.modelCandidates) {
+      try {
+        const model = this.genAI.getGenerativeModel({ model: modelName, systemInstruction });
+        const result = await this.callWithRetry(
+          () => model.generateContent(userContent),
+          `${label} (model=${modelName})`,
+        );
+        if (modelName !== this.modelName) {
+          this.logger.warn(`${label}: 기본 모델 대신 폴백 모델(${modelName})로 성공`);
+        }
+        return result.response.text().trim();
+      } catch (err) {
+        lastErr = err;
+        const status = (err as { status?: number })?.status;
+        const canFallback =
+          status === 503 || status === 429 || status === 500 || status === 404;
+        if (!canFallback) throw err;
+        this.logger.warn(`${label}: ${modelName} 사용 불가(status=${status}) — 다음 모델로 폴백`);
+      }
+    }
+    throw lastErr;
+  }
+
   private async generateWithGemini(documentText: string): Promise<WbsGenerationResult> {
     try {
-      const model = this.genAI.getGenerativeModel({
-        model: this.modelName,
-        systemInstruction: WBS_GENERATOR_SYSTEM_PROMPT,
-      });
-
-      const result = await this.callWithRetry(
-        () => model.generateContent(`<input_data>\n${documentText}\n</input_data>`),
+      const text = await this.generateContentWithFallback(
+        WBS_GENERATOR_SYSTEM_PROMPT,
+        `<input_data>\n${documentText}\n</input_data>`,
         'Gemini WBS 생성',
       );
 
-      const text = result.response.text().trim();
       const cleaned = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
       const parsed: WbsGenerationResult = JSON.parse(cleaned);
 

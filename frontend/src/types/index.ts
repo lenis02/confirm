@@ -75,6 +75,7 @@ export interface Meeting {
   title: string;
   type: 'KICKOFF' | 'PROGRESS_CHECK' | 'ISSUE_CHECK' | 'CONSENSUS';
   status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED';
+  departments?: string[] | null;
   scheduledAt: string;
   completedAt?: string;
   achievementRate?: number;
@@ -115,5 +116,14 @@ export interface CalendarWeek {
     myRole: string;
     meetings: Pick<Meeting, 'id' | 'title' | 'type' | 'status' | 'scheduledAt'>[];
     actionItems: Pick<ActionItem, 'id' | 'title' | 'status' | 'dueDate' | 'isCarriedOver'>[];
+    milestones: {
+      id: string;
+      title: string;
+      phase: string;
+      assignedRole: string;
+      isDecisionPoint: boolean;
+      startDate: string | null;
+      endDate: string | null;
+    }[];
   }[];
 }

@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { ProjectMember } from '../projects/entities/project-member.entity';
 import { Meeting } from '../meetings/entities/meeting.entity';
 import { ActionItem } from '../action-items/entities/action-item.entity';
+import { WbsItem } from '../projects/entities/wbs-item.entity';
 
 @Injectable()
 export class DashboardService {
@@ -14,6 +15,8 @@ export class DashboardService {
     private readonly meetingRepo: Repository<Meeting>,
     @InjectRepository(ActionItem)
     private readonly actionItemRepo: Repository<ActionItem>,
+    @InjectRepository(WbsItem)
+    private readonly wbsItemRepo: Repository<WbsItem>,
   ) {}
 
   async getCalendar(userId: string, week?: string) {
@@ -30,7 +33,7 @@ export class DashboardService {
       return { week: { start, end }, projects: [] };
     }
 
-    const [meetings, actionItems] = await Promise.all([
+    const [meetings, actionItems, wbsItems] = await Promise.all([
       this.meetingRepo
         .createQueryBuilder('meeting')
         .where('meeting.project_id IN (:...projectIds)', { projectIds })
@@ -47,10 +50,23 @@ export class DashboardService {
         .andWhere('item.due_date <= :end', { end })
         .orderBy('item.due_date', 'ASC')
         .getMany(),
+
+      // 시작일 또는 종료일이 이번 주에 걸치는 WBS 태스크를 마일스톤으로 노출
+      this.wbsItemRepo
+        .createQueryBuilder('wbs')
+        .where('wbs.project_id IN (:...projectIds)', { projectIds })
+        .andWhere(
+          '(wbs.end_date BETWEEN :start AND :end OR wbs.start_date BETWEEN :start AND :end)',
+          { start, end },
+        )
+        .orderBy('wbs.start_date', 'ASC')
+        .addOrderBy('wbs.order', 'ASC')
+        .getMany(),
     ]);
 
     const meetingsByProject = this.groupBy(meetings, (m) => m.projectId);
     const actionsByProject = this.groupBy(actionItems, (a) => a.projectId);
+    const wbsByProject = this.groupBy(wbsItems, (w) => w.projectId);
 
     const projects = memberships.map(({ project, role }) => ({
       id: project.id,
@@ -74,7 +90,15 @@ export class DashboardService {
           ? { id: a.assignee.id, name: a.assignee.name }
           : null,
       })),
-      milestones: [], // WBS 구현 후 채워질 영역
+      milestones: (wbsByProject[project.id] ?? []).map((w) => ({
+        id: w.id,
+        title: w.title,
+        phase: w.phase,
+        assignedRole: w.assignedRole,
+        isDecisionPoint: w.isDecisionPoint,
+        startDate: w.startDate,
+        endDate: w.endDate,
+      })),
     }));
 
     return { week: { start, end }, projects };

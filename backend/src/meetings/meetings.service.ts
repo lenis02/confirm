@@ -81,6 +81,7 @@ export class MeetingsService {
       title: dto.title,
       type: dto.type,
       scheduledAt: new Date(dto.scheduledAt),
+      departments: dto.departments && dto.departments.length > 0 ? dto.departments : null,
     });
     const saved = await this.meetingRepo.save(meeting);
 

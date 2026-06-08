@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Patch,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -19,6 +20,11 @@ export class UsersController {
   @Get('me')
   getMe(@CurrentUser() user: User) {
     return this.usersService.getMe(user.id);
+  }
+
+  @Get('search')
+  search(@CurrentUser() user: User, @Query('email') email?: string) {
+    return this.usersService.searchByEmail(email ?? '', user.id);
   }
 
   @Patch('me')

@@ -25,7 +25,7 @@ import { ProjectStatus } from './entities/project.entity';
 import { DocumentStatus } from './entities/document.entity';
 import { ProjectsService } from './projects.service';
 import { DocumentsService } from './documents.service';
-import { WbsService, UpdateWbsItemDto } from './wbs.service';
+import { WbsService, UpdateWbsItemDto, UpdateTeamResourcesDto } from './wbs.service';
 
 @Controller('projects')
 @UseGuards(JwtAuthGuard)
@@ -154,6 +154,16 @@ export class ProjectsController {
   @Patch(':projectId/wbs')
   confirmWbs(@CurrentUser() user: User, @Param('projectId') projectId: string) {
     return this.wbsService.confirmWbs(user.id, projectId);
+  }
+
+  // 정적 경로(team-resources)는 :milestoneId 파라미터 라우트보다 먼저 선언해야 매칭됨
+  @Patch(':projectId/wbs/team-resources')
+  updateTeamResources(
+    @CurrentUser() user: User,
+    @Param('projectId') projectId: string,
+    @Body() dto: UpdateTeamResourcesDto,
+  ) {
+    return this.wbsService.updateTeamResources(user.id, projectId, dto.teamResources);
   }
 
   @Patch(':projectId/wbs/:milestoneId')

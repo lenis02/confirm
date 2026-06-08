@@ -7,11 +7,20 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsNumber,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 import { ProjectsService } from './projects.service';
 import { MemberRole } from './entities/project-member.entity';
 import { ProjectWbs, WbsStatus } from './entities/project-wbs.entity';
 import { WbsItem } from './entities/wbs-item.entity';
+import { Document } from './entities/document.entity';
 import { LlmService } from '../common/llm/llm.service';
 import { Meeting, MeetingType } from '../meetings/entities/meeting.entity';
 import { MeetingChecklist } from '../meetings/entities/meeting-checklist.entity';
@@ -35,6 +44,19 @@ export class UpdateWbsItemDto {
   @IsOptional() @IsBoolean() isDecisionPoint?: boolean;
 }
 
+export class TeamResourceDto {
+  @IsString() department: string;
+  @IsString() role: string;
+  @IsOptional() @IsString() experience_level?: string;
+}
+
+export class UpdateTeamResourcesDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TeamResourceDto)
+  teamResources: TeamResourceDto[];
+}
+
 @Injectable()
 export class WbsService {
   private readonly logger = new Logger(WbsService.name);
@@ -48,6 +70,8 @@ export class WbsService {
     private readonly meetingRepo: Repository<Meeting>,
     @InjectRepository(MeetingChecklist)
     private readonly checklistRepo: Repository<MeetingChecklist>,
+    @InjectRepository(Document)
+    private readonly documentRepo: Repository<Document>,
     private readonly projectsService: ProjectsService,
     private readonly llmService: LlmService,
   ) {}
@@ -60,13 +84,20 @@ export class WbsService {
   ): Promise<ProjectWbs> {
     const result = await this.llmService.generateWbs(documentText);
 
+    // LLM 호출(수 분 소요) 중 문서가 삭제(분석 취소)됐을 수 있어 저장 직전 재확인.
+    // 삭제됐다면 document_id FK 위반을 막기 위해 링크를 비운 채로 WBS를 저장한다.
+    const documentExists = await this.documentRepo.existsBy({ id: documentId });
+    if (!documentExists) {
+      this.logger.warn(`문서(${documentId})가 처리 중 삭제됨 — WBS는 문서 링크 없이 저장합니다.`);
+    }
+
     // 기존 WBS 덮어쓰기
     const existing = await this.wbsRepo.findOne({ where: { projectId } });
     if (existing) await this.wbsRepo.remove(existing);
 
     const wbs = this.wbsRepo.create({
       projectId,
-      documentId,
+      documentId: documentExists ? documentId : undefined,
       projectSummary: result.project_context.background_and_goals,
       totalDuration: result.project_context.total_duration,
       teamResources: result.project_context.team_resources,
@@ -160,6 +191,25 @@ export class WbsService {
     wbs.status = WbsStatus.CONFIRMED;
     wbs.confirmedAt = new Date();
     wbs.confirmedById = userId;
+    await this.wbsRepo.save(wbs);
+
+    return this.findWbs(projectId);
+  }
+
+  // 사업계획서에서 AI가 인식한 팀 구성(부서·역할·경력)을 PM이 확인·수정
+  async updateTeamResources(
+    userId: string,
+    projectId: string,
+    resources: TeamResourceDto[],
+  ): Promise<ProjectWbs> {
+    await this.assertPm(userId, projectId);
+    const wbs = await this.findWbs(projectId);
+
+    wbs.teamResources = resources.map((r) => ({
+      department: r.department,
+      role: r.role,
+      experience_level: r.experience_level ?? '',
+    }));
     await this.wbsRepo.save(wbs);
 
     return this.findWbs(projectId);

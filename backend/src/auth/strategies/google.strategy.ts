@@ -14,13 +14,13 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       clientID: configService.get<string>('GOOGLE_CLIENT_ID')!,
       clientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET')!,
       callbackURL: configService.get<string>('GOOGLE_CALLBACK_URL')!,
-      scope: ['email', 'profile', 'https://www.googleapis.com/auth/calendar.events'],
+      scope: ['email', 'profile'],
     });
   }
 
   // 리프레시 토큰을 받기 위해 인증 URL에 offline + 매번 동의 파라미터 추가
   authorizationParams(): Record<string, string> {
-    return { access_type: 'offline', prompt: 'consent' };
+    return { access_type: 'online', prompt: 'consent' };
   }
 
   async validate(
